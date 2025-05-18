@@ -91,28 +91,44 @@ def meta_train(
             # Gradient Alignment Calculation (if it's a logging step)
             current_alignment_for_step = None
             if episodes_seen % 1000 == 0 and task_query_grad_vecs_for_batch:
-                # Detach meta_grad_vec to ensure it's not part of any further computation graph if copied or used elsewhere
-                meta_grad_list = [p.grad.detach().view(-1) for p in meta.parameters() if p.grad is not None]
+                if verbose: print(f"    [GradAlign DEBUG] Attempting to calculate alignment. tasks_in_batch: {len(task_query_grad_vecs_for_batch)}")
+                
+                # Access base model parameters if meta is MetaSGD for consistent grad alignment
+                params_for_meta_grad = meta.parameters()
+                if isinstance(meta, l2l.algorithms.MetaSGD):
+                    # This ensures we get the actual model parameters, not the MetaSGD-specific ones (like per-param LRs)
+                    params_for_meta_grad = meta.module.parameters()
+                
+                meta_grad_list = [p.grad.detach().view(-1) for p in params_for_meta_grad if p.grad is not None]
+                
                 if not meta_grad_list:
-                    if verbose: print("    [GradAlign] Warning: Meta gradient list is empty (all p.grad is None).")
+                    if verbose: print("    [GradAlign DEBUG] meta_grad_list is EMPTY. All p.grad might be None for meta params.")
                 else:
+                    if verbose: print(f"    [GradAlign DEBUG] meta_grad_list has {len(meta_grad_list)} items.")
                     meta_grad_vec = torch.cat(meta_grad_list)
-                    if meta_grad_vec.nelement() > 0: # Ensure meta_grad is not empty
+                    
+                    if meta_grad_vec.nelement() > 0:
+                        if verbose: print(f"    [GradAlign DEBUG] meta_grad_vec has {meta_grad_vec.nelement()} elements.")
                         alignments_for_tasks_in_batch = []
                         for task_idx, task_grad_vec in enumerate(task_query_grad_vecs_for_batch):
+                            if verbose: print(f"    [GradAlign DEBUG] Task {task_idx}: task_grad_vec has {task_grad_vec.nelement()} elements.")
                             # Ensure parameter vectors are of the same size for cosine similarity
                             # This might not always be true if learner.parameters() and meta.parameters() differ in structure
                             # or if some meta params didn't get grads. For MetaSGD, they should be congruent.
-                            if task_grad_vec.nelement() == meta_grad_vec.nelement():
+                            if task_grad_vec.nelement() == meta_grad_vec.nelement(): # This should be true now
                                 alignment = F.cosine_similarity(meta_grad_vec, task_grad_vec, dim=0)
                                 alignments_for_tasks_in_batch.append(alignment.item())
-                            else:
-                                if verbose: print(f"    [GradAlign] Warning: Mismatch in grad vec elements for task {task_idx}. Meta: {meta_grad_vec.nelement()}, Task: {task_grad_vec.nelement()}")
+                                if verbose: print(f"    [GradAlign DEBUG] Task {task_idx}: Computed alignment: {alignment.item()}")
+                            # else: # This 'else' for mismatch should not be hit now
+                                # if verbose: print(f"    [GradAlign] Warning: Mismatch in grad vec elements for task {task_idx}. Meta: {meta_grad_vec.nelement()}, Task: {task_grad_vec.nelement()}")
                         
                         if alignments_for_tasks_in_batch:
                             current_alignment_for_step = np.mean(alignments_for_tasks_in_batch)
+                            if verbose: print(f"    [GradAlign DEBUG] Calculated current_alignment_for_step: {current_alignment_for_step}")
+                        else:
+                            if verbose: print("    [GradAlign DEBUG] alignments_for_tasks_in_batch is EMPTY.")
                     else:
-                        if verbose: print("    [GradAlign] Warning: Meta gradient vector is empty after cat.")
+                        if verbose: print("    [GradAlign DEBUG] meta_grad_vec is EMPTY after torch.cat.")
 
             clip(meta.parameters(), 1.0) # Clip after .grad is populated and used
             optimizer.step()
