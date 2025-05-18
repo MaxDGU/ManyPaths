@@ -9,7 +9,7 @@
 #SBATCH --ntasks=1                 # Number of MPI ranks
 #SBATCH --cpus-per-task=4          # Number of CPU cores per task
 #SBATCH --mem=16G                  # Job memory request
-#SBATCH --time=04:00:00            # Time limit hrs:min:sec (Adjust if 20k epochs is faster)
+#SBATCH --time=06:00:00            # Time limit hrs:min:sec (Adjust if 20k epochs is faster)
 #SBATCH --gres=gpu:1               # Request 1 GPU 
 #SBATCH --partition=pli
 #SBATCH --account=nam
@@ -93,7 +93,7 @@ fi
 ADAPTATION_STEPS=1
 SEED_VAL=0
 HYPER_INDEX_VAL=14
-EPOCHS=20000 
+EPOCHS=10000
 TASKS_PER_META_BATCH=4
 OUTER_LR=1e-3
 INNER_LR=1e-2
