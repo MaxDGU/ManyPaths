@@ -164,7 +164,9 @@ def meta_train(
                         print(f"    Periodic checkpoint saved at episode {episodes_seen}.")
 
                 if verbose:
-                    alignment_str = f"{current_alignment_for_step:.4f}" if current_alignment_for_step is not None else "N/A"
+                    # Use the value that was just appended to the log for the print statement
+                    logged_alignment_value = grad_alignments_log[-1] if grad_alignments_log and grad_alignments_log[-1] is not None else np.nan 
+                    alignment_str = f"{logged_alignment_value:.4f}" if not np.isnan(logged_alignment_value) else "N/A"
                     print(
                         f"Episodes {episodes_seen}, GradAlign: {alignment_str}, "
                         f"Meta-Train Loss: {meta_loss_agg.item():.4f}, Meta-Val Loss: {meta_val_loss:.4f}; "
