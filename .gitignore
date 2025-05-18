@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+ENV/
+
+# IDE / Editor specific
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Specific to this project
+mg7411@della-gpu.princeton.ed
+results/
+state_dicts/
+visualizations/
+data/
+learn2learn_repo/
+saved_datasets/
+
+# Output files
+*.pdf
+*.log
+
+# Specific PDF to exclude if it was a mistake to include all PDFs before
+# If GoodmanTenenbaum2008-CognitiveScience.pdf IS to be tracked, remove it from here
+# OR comment out the *.pdf line above and list specific PDFs to ignore.
+# For now, assuming all PDFs are by default ignored, unless explicitly added.
+# To track a specific PDF like Goodman... then it must be force added (git add -f ...)
+# or the *.pdf line removed/commented.
+
+# If you want to keep GoodmanTenenbaum2008-CognitiveScience.pdf, 
+# it's better to remove '*.pdf' above and be explicit about other PDFs to ignore,
+# or use `git add -f GoodmanTenenbaum2008-CognitiveScience.pdf` later.
+# For now, the *.pdf line will ignore it. 

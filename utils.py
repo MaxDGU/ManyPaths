@@ -3,20 +3,30 @@ import random
 import numpy as np
 import torch
 from torch.utils.data.dataloader import default_collate
+from torch.nn.utils.rnn import pad_sequence
 
 
 def collate_concept(batch, device="cpu"):
-    X_s, y_s, X_q, y_q = zip(*batch)
+    # Each item in batch, after BaseMetaDataset.__getitem__ for MetaBitConceptsDataset, is:
+    # item[0]: X_s_processed_tensor (from original task_data[0])
+    # item[1]: y_s_tensor (from original task_data[2])
+    # item[2]: X_q_processed_tensor (from original task_data[3])
+    # item[3]: y_q_tensor (from original task_data[5])
 
-    # Move consistent sizes to the device
-    X_q = torch.stack(X_q).to(device)
-    y_q = torch.stack(y_q).to(device)
+    X_s_list = [item[0].to(device) for item in batch]
+    y_s_list = [item[1].to(device) for item in batch]
+    X_q_list = [item[2].to(device) for item in batch]
+    y_q_list = [item[3].to(device) for item in batch]
 
-    # For support sets (if sizes vary), move each to device individually
-    X_s = [x.to(device) for x in X_s]
-    y_s = [y.to(device) for y in y_s]
+    # Pad sequences: batch_first=True makes the output (batch_size, max_len, num_features)
+    # For labels, padding_value=0.0 is used. This might be okay if 0 is a neutral/non-class for BCE.
+    # If labels are strictly 0 or 1, padding with 0 means these will be treated as class 0 instances.
+    X_s_padded = pad_sequence(X_s_list, batch_first=True, padding_value=0.0)
+    y_s_padded = pad_sequence(y_s_list, batch_first=True, padding_value=0.0)
+    X_q_padded = pad_sequence(X_q_list, batch_first=True, padding_value=0.0)
+    y_q_padded = pad_sequence(y_q_list, batch_first=True, padding_value=0.0)
 
-    return X_s, y_s, X_q, y_q
+    return X_s_padded, y_s_padded, X_q_padded, y_q_padded
 
 
 def collate_default(batch, device="cpu"):

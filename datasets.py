@@ -8,10 +8,12 @@ from torchvision.datasets.utils import list_files
 from collections import defaultdict
 from torch.utils.data import Dataset
 from generate_numbers import generate_number_grid
-from generate_concepts import generate_concept
-from grammer import DNFHypothesis
+from generate_concepts import generate_concept # For visual concepts if still used
+from generate_concepts import define_random_pcfg_concept, generate_example_for_pcfg_concept, PCFG_DEFAULT_MAX_DEPTH
 from constants import FEATURE_VALUES
 
+MAX_CONCEPT_RESAMPLES = 10 # Max times to try resampling a concept if example generation fails
+CACHE_DIR = "data/concept_cache" # Directory for caching generated tasks
 
 class BaseMetaDataset(Dataset):
     def __init__(self):
@@ -21,8 +23,9 @@ class BaseMetaDataset(Dataset):
         return len(self.tasks)
 
     def __getitem__(self, idx):
-        X_s, _, y_s, X_q, _, y_q, _ = self.tasks[idx]
-        return X_s, y_s, X_q, y_q
+        task_data = self.tasks[idx]
+        # Adjusted to match the extended task tuple including complexity metrics
+        return task_data[0], task_data[2], task_data[3], task_data[5], task_data[6], task_data[7], task_data[8]
 
     def _image_to_patches(self, image_batch, patch_size=4):
         B, C, H, W = image_batch.shape
@@ -40,83 +43,234 @@ class MetaBitConceptsDataset(BaseMetaDataset):
     def __init__(
         self,
         n_tasks: int = 10000,
-        data: str = "image",
-        model: str = "cnn",
-        n_support: int = None,  # for test-time, testing across n_support
+        data: str = "bits", # Should always be "bits" for this class now
+        model: str = "mlp",  # Model type, affects input processing sometimes
+        n_support: int = None, # If provided, used to set k_shot_pos/neg for eval
+        num_features: int = 8, 
+        pcfg_max_depth: int = PCFG_DEFAULT_MAX_DEPTH,
+        k_shot_positive: int = 2,
+        k_shot_negative: int = 3,
+        n_query_positive: int = 5,
+        n_query_negative: int = 5
     ):
         super().__init__()
-        assert data in ["image", "bits"]
+        assert data == "bits", "MetaBitConceptsDataset is designed for 'bits' data type only."
         self.n_tasks = n_tasks
-        self.data = data
-        self.model = model
-        self.n_support = n_support
-        self._generate_tasks()
+        self.model = model # Mainly for potential model-specific input processing, less relevant for MLP bits
+        self.num_features = num_features
+        self.pcfg_max_depth = pcfg_max_depth
+        
+        self.k_shot_positive_target = k_shot_positive
+        self.k_shot_negative_target = k_shot_negative
+        self.n_query_positive_target = n_query_positive
+        self.n_query_negative_target = n_query_negative
+
+        # If n_support is provided (e.g. for evaluation from init_dataset),
+        # override the k_shot_positive/negative for this instance.
+        if n_support is not None:
+            self.k_shot_positive_target = max(1, n_support // 2)
+            self.k_shot_negative_target = max(1, n_support - self.k_shot_positive_target)
+            # Also scale query examples if n_support is given (e.g. for comparable eval task sizes)
+            self.n_query_positive_target = max(1, n_support) # e.g. n_support pos query examples
+            self.n_query_negative_target = max(1, n_support) # e.g. n_support neg query examples
+        
+        # --- Task Caching Logic ---
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        # Construct a filename based on key parameters that define the dataset uniqueness
+        cache_filename_parts = [
+            "pcfg_tasks",
+            f"f{self.num_features}",
+            f"d{self.pcfg_max_depth}",
+            f"s{self.k_shot_positive_target}p{self.k_shot_negative_target}n",
+            f"q{self.n_query_positive_target}p{self.n_query_negative_target}n",
+            f"t{self.n_tasks}"
+        ]
+        self.cache_file = os.path.join(CACHE_DIR, "_".join(cache_filename_parts) + ".pt")
+
+        if os.path.exists(self.cache_file):
+            print(f"Loading PCFG concept tasks from cache: {self.cache_file}")
+            try:
+                self.tasks = torch.load(self.cache_file, weights_only=True)
+            except RuntimeError as e: # PyTorch often raises RuntimeError for weights_only issues
+                print(f"Warning: Failed to load cache with weights_only=True ({e}). This might happen if the cache was saved with an older PyTorch version or contains non-tensor data. Falling back to weights_only=False.")
+                self.tasks = torch.load(self.cache_file, weights_only=False) # This will emit FutureWarning
+            
+            if len(self.tasks) != self.n_tasks:
+                print(f"Warning: Cached tasks count ({len(self.tasks)}) doesn't match requested n_tasks ({self.n_tasks}). Regenerating.")
+                self._generate_tasks_and_cache()
+            else:
+                 print(f"Successfully loaded {len(self.tasks)} tasks from cache.")
+        else:
+            print(f"No cache found at {self.cache_file}. Generating PCFG concept tasks...")
+            self._generate_tasks_and_cache()
+
+    def _generate_tasks_and_cache(self):
+        self._generate_tasks() # This populates self.tasks
+        if self.tasks: # Only save if tasks were actually generated
+            print(f"Saving {len(self.tasks)} generated PCFG tasks to cache: {self.cache_file}")
+            try:
+                torch.save(self.tasks, self.cache_file)
+                print("Tasks successfully saved to cache.")
+            except Exception as e:
+                print(f"Error saving tasks to cache: {e}")
+        else:
+            print("No tasks generated, cache not saved.")
 
     def _generate_tasks(self):
-        if self.data == "image":
-            self._generate_image_tasks()
-        else:
-            self._generate_bit_tasks()
+        # This method is for bit tasks using PCFG generated concepts
+        self.tasks = [] # Ensure tasks list is clear before starting generation
+        tasks_generated = 0
+        while tasks_generated < self.n_tasks:
+            current_concept_expression = None
+            concept_literals, concept_depth = -1, -1 # Default/error values
+            
+            support_inputs_list = []
+            support_labels_list = []
+            query_inputs_list = []
+            query_labels_list = []
+            
+            valid_task_generated = False
+            for concept_resample_attempt in range(MAX_CONCEPT_RESAMPLES):
+                concept_expression, concept_literals, concept_depth = define_random_pcfg_concept(
+                    self.num_features, max_depth=self.pcfg_max_depth
+                )
+                current_concept_expression = concept_expression # Store for potential reuse if only some examples fail
+
+                # Clear lists for new concept attempt
+                support_inputs_list.clear()
+                support_labels_list.clear()
+                query_inputs_list.clear()
+                query_labels_list.clear()
+                
+                possible_to_generate = True
+
+                # Generate positive support examples
+                for _ in range(self.k_shot_positive_target):
+                    inp, lab = generate_example_for_pcfg_concept(concept_expression, self.num_features, force_positive=True)
+                    if inp is None: possible_to_generate = False; break
+                    support_inputs_list.append(inp)
+                    support_labels_list.append(lab)
+                if not possible_to_generate: continue # Resample concept
+
+                # Generate negative support examples
+                for _ in range(self.k_shot_negative_target):
+                    inp, lab = generate_example_for_pcfg_concept(concept_expression, self.num_features, force_positive=False)
+                    if inp is None: possible_to_generate = False; break
+                    support_inputs_list.append(inp)
+                    support_labels_list.append(lab)
+                if not possible_to_generate: continue # Resample concept
+
+                # Generate positive query examples
+                for _ in range(self.n_query_positive_target):
+                    inp, lab = generate_example_for_pcfg_concept(concept_expression, self.num_features, force_positive=True)
+                    if inp is None: possible_to_generate = False; break
+                    query_inputs_list.append(inp)
+                    query_labels_list.append(lab)
+                if not possible_to_generate: continue # Resample concept
+
+                # Generate negative query examples
+                for _ in range(self.n_query_negative_target):
+                    inp, lab = generate_example_for_pcfg_concept(concept_expression, self.num_features, force_positive=False)
+                    if inp is None: possible_to_generate = False; break
+                    query_inputs_list.append(inp)
+                    query_labels_list.append(lab)
+                if not possible_to_generate: continue # Resample concept
+                
+                valid_task_generated = True # All examples generated successfully
+                break # Break from concept_resample_attempt loop
+            
+            if not valid_task_generated:
+                print(f"Warning: Failed to generate a valid task after {MAX_CONCEPT_RESAMPLES} concept resamples. Skipping task {tasks_generated + 1}.")
+                # Optionally, could raise an error or have a fallback (e.g. simpler concept)
+                # For now, we just might generate fewer than n_tasks if this happens often.
+                # To strictly meet n_tasks, this loop structure might need adjustment or error handling.
+                continue # Try to generate the next task for the while loop
+
+            # Shuffle support and query sets independently
+            support_combined = list(zip(support_inputs_list, support_labels_list))
+            random.shuffle(support_combined)
+            s_inputs_shuffled, s_labels_shuffled = zip(*support_combined) if support_combined else ([], [])
+
+            query_combined = list(zip(query_inputs_list, query_labels_list))
+            random.shuffle(query_combined)
+            q_inputs_shuffled, q_labels_shuffled = zip(*query_combined) if query_combined else ([], [])
+
+            X_s_numpy = np.array(s_inputs_shuffled, dtype=np.float32) if s_inputs_shuffled else np.empty((0,self.num_features), dtype=np.float32)
+            y_s_numpy = np.array(s_labels_shuffled, dtype=np.float32).reshape(-1, 1) if s_labels_shuffled else np.empty((0,1), dtype=np.float32)
+            X_q_numpy = np.array(q_inputs_shuffled, dtype=np.float32) if q_inputs_shuffled else np.empty((0,self.num_features), dtype=np.float32)
+            y_q_numpy = np.array(q_labels_shuffled, dtype=np.float32).reshape(-1, 1) if q_labels_shuffled else np.empty((0,1), dtype=np.float32)
+
+            X_s_original_tensor = torch.from_numpy(X_s_numpy)
+            y_s_tensor = torch.from_numpy(y_s_numpy)
+            X_q_original_tensor = torch.from_numpy(X_q_numpy)
+            y_q_tensor = torch.from_numpy(y_q_numpy)
+
+            X_s_processed_tensor = X_s_original_tensor * 2.0 - 1.0 # Scale to {-1, 1}
+            X_q_processed_tensor = X_q_original_tensor * 2.0 - 1.0
+            
+            if self.model in ["lstm", "transformer"]:
+                X_s_processed_tensor = X_s_processed_tensor.unsqueeze(2)
+                X_q_processed_tensor = X_q_processed_tensor.unsqueeze(2)
+
+            self.tasks.append((
+                X_s_processed_tensor, X_s_original_tensor, y_s_tensor,
+                X_q_processed_tensor, X_q_original_tensor, y_q_tensor,
+                len(s_inputs_shuffled), # Actual number of support examples
+                concept_literals,       # PCFG concept_literals
+                concept_depth           # PCFG concept_depth
+            ))
+            tasks_generated += 1
+            if tasks_generated % 1000 == 0:
+                 print(f"Generated {tasks_generated}/{self.n_tasks} PCFG concept tasks...")
 
     def _generate_image_tasks(self):
-        X_q = torch.tensor(FEATURE_VALUES, dtype=torch.float)
+        # This is the old method for image-based concepts. Keep if needed for other experiments.
+        # For now, it will not be called if data="bits" is asserted in __init__.
+        # If you need to support both, the dispatch in _generate_tasks would be needed.
+        from grammer import DNFHypothesis # Import DNFHypothesis here as it's only used for image tasks now
+        X_q_orig_bits = torch.tensor(FEATURE_VALUES, dtype=torch.float) # These are the 4-bit patterns
         X_image_q = torch.zeros((16, 3, 32, 32))
-        for i, bits in enumerate(FEATURE_VALUES):
-            grid_image = generate_concept(bits, scale=255.0).reshape(3, 32, 32)
+        for i, bits_arr in enumerate(FEATURE_VALUES): # bits_arr is a list/array of 4 bits
+            grid_image = generate_concept(bits_arr, scale=255.0).reshape(3, 32, 32) # generate_concept expects list/array
             X_image_q[i] = torch.from_numpy(grid_image)
+        
         mean = X_image_q.mean(dim=[0, 2, 3])
         std = X_image_q.std(dim=[0, 2, 3])
-        X_image_q = (X_image_q - mean.view(1, -1, 1, 1)) / std.view(1, -1, 1, 1)
-        if self.model == "mlp":
-            X_image_q = X_image_q.reshape(16, 32 * 32 * 3)
-        elif self.model in ["lstm", "transformer"]:
-            X_image_q = self._image_to_patches(X_image_q)
-        while len(self.tasks) < self.n_tasks:
-            hyp = DNFHypothesis(n_features=4, no_true_false_top=True, b=1.0)
-            labels = [hyp.function(f) for f in FEATURE_VALUES]
-            for i in range(len(labels) - 1):
-                if labels[i] != labels[i + 1]:
-                    n_support = (
-                        np.random.randint(2, high=20)
-                        if self.n_support is None
-                        else self.n_support
-                    )
-                    inds = np.random.choice(16, size=(n_support,))
-                    X_s = X_q[inds]
-                    X_image_s = X_image_q[inds]
-                    y_s = torch.tensor(labels, dtype=torch.float).unsqueeze(1)[inds]
-                    y_q = torch.tensor(labels, dtype=torch.float).unsqueeze(1)
-                    self.tasks.append(
-                        (X_image_s, X_s, y_s, X_image_q, X_q, y_q, n_support)
-                    )
-                    break
+        X_image_q_processed = (X_image_q - mean.view(1, -1, 1, 1)) / std.view(1, -1, 1, 1)
 
-    def _generate_bit_tasks(self):
-        X_q = torch.tensor(FEATURE_VALUES, dtype=torch.float)
-        if self.model in ["lstm", "transformer"]:
-            X_q = X_q.unsqueeze(2)
-        while len(self.tasks) < self.n_tasks:
+        if self.model == "mlp":
+            X_image_q_processed = X_image_q_processed.reshape(16, 32 * 32 * 3)
+        elif self.model in ["lstm", "transformer"]:
+            X_image_q_processed = self._image_to_patches(X_image_q_processed)
+        
+        while len(self.tasks) < self.n_tasks: # This should be tasks_generated < self.n_tasks for consistency
             hyp = DNFHypothesis(n_features=4, no_true_false_top=True, b=1.0)
-            labels = [hyp.function(f) for f in FEATURE_VALUES]
-            for i in range(len(labels) - 1):
-                if labels[i] != labels[i + 1]:
-                    n_support = (
-                        np.random.randint(2, high=20)
-                        if self.n_support is None
-                        else self.n_support
-                    )
-                    inds = np.random.choice(16, size=(n_support,))
-                    X_s = torch.tensor(FEATURE_VALUES[inds], dtype=torch.float)
-                    y_s = torch.tensor(labels, dtype=torch.float).unsqueeze(1)[inds]
-                    y_q = torch.tensor(labels, dtype=torch.float).unsqueeze(1)
-                    if self.model in ["lstm", "transformer"]:
-                        X_s = X_s.unsqueeze(2)
-                    X_bits_s = X_s * 2 - 1
-                    X_bits_q = X_q * 2 - 1
-                    self.tasks.append(
-                        (X_bits_s, X_s, y_s, X_bits_q, X_q, y_q, n_support)
-                    )
-                    break
+            labels_for_feature_values = [hyp.function(f_val) for f_val in FEATURE_VALUES] 
+            if len(set(labels_for_feature_values)) < 2: continue
+
+            n_support_current = (
+                np.random.randint(2, high=20) 
+                if getattr(self, 'k_shot_positive_target', None) is None # Crude check if n_support wasn't used
+                else self.k_shot_positive_target + self.k_shot_negative_target # Use combined target
+            )
+            if n_support_current == 0 : n_support_current = 1 
+
+            inds = np.random.choice(16, size=(n_support_current,), replace=True) 
+            X_s_orig_bits_current = X_q_orig_bits[inds]
+            X_image_s_processed_current = X_image_q_processed[inds]
+            y_s_current = torch.tensor(labels_for_feature_values, dtype=torch.float).unsqueeze(1)[inds]
+            y_q_current = torch.tensor(labels_for_feature_values, dtype=torch.float).unsqueeze(1) 
+            
+            # For image tasks, concept_literals and concept_depth are not directly applicable from PCFG
+            # We can add placeholders or derive them differently if needed.
+            concept_literals_img, concept_depth_img = -1, -1 # Placeholder for image tasks
+
+            self.tasks.append((
+                X_image_s_processed_current, X_s_orig_bits_current, y_s_current, 
+                X_image_q_processed, X_q_orig_bits, y_q_current, n_support_current,
+                concept_literals_img, concept_depth_img # Add placeholders
+            ))
+            # tasks_generated += 1 # Increment if this loop is the main one for image tasks
 
 
 class MetaModuloDataset(BaseMetaDataset):
@@ -207,7 +361,7 @@ class MetaModuloDataset(BaseMetaDataset):
         if self.model == "mlp":
             X_bits_s = X_bits_s.squeeze()
             X_bits_q = X_bits_q.squeeze()
-        return (X_bits_s, X_s, y_s, X_bits_q, X_q, y_q, m)
+        return (X_bits_s, X_s, y_s, X_bits_q, X_q, y_q, n_support)
 
     def _generate_number_task(self, m):
         n_support = (
