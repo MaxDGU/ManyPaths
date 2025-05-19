@@ -36,6 +36,26 @@ def generate_dummy_sgd_trajectory(num_tasks=200):
     df['query_accuracy'] = df['query_accuracy'].clip(0, 1)
     return df
 
+def generate_dummy_drift_data(num_points=100, type='maml', final_drift_mean=5.0, final_drift_std=1.0):
+    """Generates dummy weight drift data."""
+    if type == 'maml':
+        epochs = np.arange(1, num_points + 1) * 100 # Assuming 100 is a log interval
+        drift_from_init = final_drift_mean * (1 - np.exp(-epochs / (num_points * 100 * 0.4))) + np.random.normal(0, 0.1, num_points)
+        drift_from_prev = np.abs(np.random.normal(0.1, 0.05, num_points) * (final_drift_mean / epochs[-1]) * (epochs[-1] - epochs/2) / (epochs[-1]/2) ) # smaller drifts from prev
+        df = pd.DataFrame({
+            'epoch': epochs,
+            'l2_drift_from_init': drift_from_init,
+            'l2_drift_from_previous': drift_from_prev
+        })
+        return df
+    elif type == 'sgd': # Represents final drift of N independent SGD models from their inits
+        drifts = np.random.normal(loc=final_drift_mean * 0.8, scale=final_drift_std, size=num_points) # SGD might drift less or more variably
+        df = pd.DataFrame({
+            'final_l2_drift_from_init': np.abs(drifts) # Ensure positive
+        })
+        return df
+    return pd.DataFrame()
+
 # --- Plotting Functions ---
 
 def plot_maml_learning_curves(df_maml, title_suffix="", output_dir="figures"):
@@ -105,6 +125,62 @@ def plot_sgd_performance_distribution(df_sgd, title_suffix="", output_dir="figur
     print(f"Saved SGD performance distribution plot to {output_dir}/")
     plt.close(fig)
 
+def plot_gradient_alignment_maml(df_maml, title_suffix="", output_dir="figures"):
+    """Plots MAML gradient alignment specifically."""
+    if df_maml.empty or 'grad_alignment' not in df_maml.columns:
+        print(f"MAML dataframe for grad alignment is empty or missing column for {title_suffix}. Skipping plot.")
+        return
+
+    fig, ax = plt.subplots(1, 1, figsize=(10, 4))
+    epochs_col = 'log_step' # Assuming similar x-axis as other MAML plots
+
+    sns.lineplot(ax=ax, x=epochs_col, y='grad_alignment', data=df_maml, label="Gradient Alignment", color='purple')
+    ax.set_ylabel("Cosine Similarity")
+    ax.set_title(f"MAML Gradient Alignment Over Training {title_suffix}")
+    ax.set_xlabel("Training Steps / Epochs")
+    ax.legend()
+    # ax.set_ylim(-1.05, 1.05) # Optional
+
+    plt.tight_layout()
+    os.makedirs(output_dir, exist_ok=True)
+    plt.savefig(os.path.join(output_dir, f"maml_gradient_alignment{title_suffix.replace(' ', '_')}.png"))
+    print(f"Saved MAML gradient alignment plot to {output_dir}/")
+    plt.close(fig)
+
+def plot_weight_drift_comparison(df_maml_drift, df_sgd_final_drifts, title_suffix="", output_dir="figures"):
+    """Plots MAML weight drift over epochs and a distribution of final SGD model drifts."""
+    
+    fig, axs = plt.subplots(1, 2, figsize=(15, 6))
+
+    # MAML Weight Drift
+    if not df_maml_drift.empty and 'l2_drift_from_init' in df_maml_drift.columns:
+        sns.lineplot(ax=axs[0], x='epoch', y='l2_drift_from_init', data=df_maml_drift, label="MAML: Drift from Init", color='darkorange')
+        if 'l2_drift_from_previous' in df_maml_drift.columns:
+             sns.lineplot(ax=axs[0], x='epoch', y='l2_drift_from_previous', data=df_maml_drift, label="MAML: Drift from Prev Checkpoint", color='gold', linestyle='--')
+        axs[0].set_xlabel("MAML Training Epochs")
+        axs[0].set_ylabel("L2 Distance (Parameters)")
+        axs[0].set_title(f"MAML Weight Drift {title_suffix}")
+        axs[0].legend()
+    else:
+        axs[0].text(0.5, 0.5, "MAML drift data missing or incomplete", ha='center', va='center')
+        axs[0].set_title(f"MAML Weight Drift {title_suffix}")
+
+    # SGD Final Weight Drift Distribution
+    if not df_sgd_final_drifts.empty and 'final_l2_drift_from_init' in df_sgd_final_drifts.columns:
+        sns.histplot(ax=axs[1], data=df_sgd_final_drifts, x='final_l2_drift_from_init', kde=True, color='teal', bins=20)
+        axs[1].set_xlabel("L2 Distance (Final SGD Model from its Init)")
+        axs[1].set_ylabel("Number of SGD Tasks")
+        axs[1].set_title(f"Distribution of Final SGD Model Drifts {title_suffix}")
+    else:
+        axs[1].text(0.5, 0.5, "SGD drift data missing or incomplete", ha='center', va='center')
+        axs[1].set_title(f"Distribution of Final SGD Model Drifts {title_suffix}")
+
+    plt.tight_layout()
+    os.makedirs(output_dir, exist_ok=True)
+    plt.savefig(os.path.join(output_dir, f"weight_drift_comparison{title_suffix.replace(' ', '_')}.png"))
+    print(f"Saved weight drift comparison plot to {output_dir}/")
+    plt.close(fig)
+
 
 # --- Main section to generate plots with dummy data ---
 if __name__ == "__main__":
@@ -126,14 +202,24 @@ if __name__ == "__main__":
     dummy_sgd_df_complex['query_accuracy'] -= 0.08
     dummy_sgd_df_complex['query_accuracy'] = dummy_sgd_df_complex['query_accuracy'].clip(0,1)
 
+    # Generate dummy drift data
+    dummy_maml_drift_simple = generate_dummy_drift_data(num_points=100, type='maml', final_drift_mean=10)
+    dummy_sgd_final_drifts_simple = generate_dummy_drift_data(num_points=200, type='sgd', final_drift_mean=8, final_drift_std=2.0)
+    
+    dummy_maml_drift_complex = generate_dummy_drift_data(num_points=100, type='maml', final_drift_mean=15)
+    dummy_sgd_final_drifts_complex = generate_dummy_drift_data(num_points=200, type='sgd', final_drift_mean=12, final_drift_std=2.5)
 
     # Plot for a 'simple' concept setting
     plot_maml_learning_curves(dummy_maml_df_simple, title_suffix=" (Concept: Simple)")
     plot_sgd_performance_distribution(dummy_sgd_df_simple, title_suffix=" (Concept: Simple)")
+    plot_gradient_alignment_maml(dummy_maml_df_simple, title_suffix=" (Concept: Simple)")
+    plot_weight_drift_comparison(dummy_maml_drift_simple, dummy_sgd_final_drifts_simple, title_suffix=" (Concept: Simple)")
 
     # Plot for a 'complex' concept setting
     plot_maml_learning_curves(dummy_maml_df_complex, title_suffix=" (Concept: Complex)")
     plot_sgd_performance_distribution(dummy_sgd_df_complex, title_suffix=" (Concept: Complex)")
+    plot_gradient_alignment_maml(dummy_maml_df_complex, title_suffix=" (Concept: Complex)")
+    plot_weight_drift_comparison(dummy_maml_drift_complex, dummy_sgd_final_drifts_complex, title_suffix=" (Concept: Complex)")
     
     print("Finished generating dummy plots. Check the 'figures' directory.")
 
@@ -148,3 +234,5 @@ if __name__ == "__main__":
     #    Real MAML trajectory CSVs have 'log_step' which means "every X episodes" where X is the meta_train LOG_INTERVAL.
     #    So, the x-axis label might be "Logging Steps (x LOG_INTERVAL episodes_seen)".
     # 4. Add comparison plots (MAML vs SGD final performance). 
+    # 5. Create functions to load REAL drift data (from analyze_checkpoint_drift.py output for MAML, 
+    #    and potentially calculated from saved SGD models for SGD final drifts).
