@@ -11,7 +11,7 @@ run_on_della() {
     
     # Run the analysis
     python della_trajectory_analysis.py \
-        --search_paths /scratch/network/mg7411 /tmp /home/mg7411 . \
+        --search_paths /scratch/gpfs/mg7411/ManyPaths/results . \
         --output_dir della_analysis_results
     
     echo "✅ Analysis complete!"
