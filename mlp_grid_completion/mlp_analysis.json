@@ -1,0 +1,106 @@
+{
+  "total_experiments": 48,
+  "total_time_hours": 145.83333333333334,
+  "by_priority": {
+    "P1_CORE": {
+      "count": 12,
+      "total_time_hours": 32.5,
+      "configurations": [
+        "F32_D3",
+        "F16_D3"
+      ],
+      "description": "Essential complexity scaling evidence"
+    },
+    "P2_DEPTH": {
+      "count": 18,
+      "total_time_hours": 52.916666666666664,
+      "configurations": [
+        "F16_D5",
+        "F8_D5",
+        "F32_D5"
+      ],
+      "description": "Logical complexity (depth) scaling"
+    },
+    "P3_MAX": {
+      "count": 18,
+      "total_time_hours": 60.416666666666664,
+      "configurations": [
+        "F16_D7",
+        "F32_D7",
+        "F8_D7"
+      ],
+      "description": "Maximum complexity validation"
+    }
+  },
+  "by_config": {
+    "F16_D3": {
+      "k1": 3,
+      "k10": 3,
+      "total_time": 14.583333333333332
+    },
+    "F32_D3": {
+      "k1": 3,
+      "k10": 3,
+      "total_time": 17.916666666666668
+    },
+    "F8_D5": {
+      "k1": 3,
+      "k10": 3,
+      "total_time": 15.416666666666668
+    },
+    "F16_D5": {
+      "k1": 3,
+      "k10": 3,
+      "total_time": 17.083333333333332
+    },
+    "F32_D5": {
+      "k1": 3,
+      "k10": 3,
+      "total_time": 20.416666666666664
+    },
+    "F8_D7": {
+      "k1": 3,
+      "k10": 3,
+      "total_time": 17.916666666666668
+    },
+    "F16_D7": {
+      "k1": 3,
+      "k10": 3,
+      "total_time": 19.583333333333332
+    },
+    "F32_D7": {
+      "k1": 3,
+      "k10": 3,
+      "total_time": 22.916666666666664
+    }
+  },
+  "statistical_impact": {
+    "current_robust": [
+      "F8_D3"
+    ],
+    "after_p1": [
+      "F8_D3",
+      "F16_D3",
+      "F32_D3"
+    ],
+    "after_p2": [
+      "F8_D3",
+      "F16_D3",
+      "F32_D3",
+      "F8_D5",
+      "F16_D5",
+      "F32_D5"
+    ],
+    "after_p3": [
+      "F8_D3",
+      "F16_D3",
+      "F32_D3",
+      "F8_D5",
+      "F16_D5",
+      "F32_D5",
+      "F8_D7",
+      "F16_D7",
+      "F32_D7"
+    ]
+  }
+}
