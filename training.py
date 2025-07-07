@@ -84,9 +84,10 @@ def meta_train(
 
                 # Gradient alignment: calculated if it's a LOG_INTERVAL step for episodes_seen_total
                 if episodes_seen_total % LOG_INTERVAL == 0: 
-                    # Use base model parameters only to ensure dimensional compatibility
-                    task_params = learner.module.parameters() if hasattr(learner, 'module') else learner.parameters()
-                    task_grads_raw = torch.autograd.grad(task_query_loss, task_params, retain_graph=True, allow_unused=True)
+                    # Use base model parameters only (exclude learning rate parameters) to ensure dimensional compatibility
+                    # MetaSGD stores both base model params and lr params, we need only base model params
+                    task_base_params = [p for name, p in learner.named_parameters() if not name.startswith('lr')]
+                    task_grads_raw = torch.autograd.grad(task_query_loss, task_base_params, retain_graph=True, allow_unused=True)
                     task_grad_vec = torch.cat([g.view(-1) for g in task_grads_raw if g is not None])
                     if task_grad_vec.nelement() > 0:
                         task_query_grad_vecs_for_batch.append(task_grad_vec)
@@ -96,9 +97,10 @@ def meta_train(
             
             current_alignment_for_log_step = np.nan # Default to NaN
             if episodes_seen_total % LOG_INTERVAL == 0 and task_query_grad_vecs_for_batch:
-                # Use base model parameters only to ensure dimensional compatibility with task gradients
-                params_for_meta_grad = meta.module.parameters() if hasattr(meta, 'module') else meta.parameters()
-                meta_grad_list = [p.grad.detach().view(-1) for p in params_for_meta_grad if p.grad is not None]
+                # Use base model parameters only (exclude learning rate parameters) to ensure dimensional compatibility with task gradients
+                # MetaSGD stores both base model params and lr params, we need only base model params
+                meta_base_params = [p for name, p in meta.named_parameters() if not name.startswith('lr')]
+                meta_grad_list = [p.grad.detach().view(-1) for p in meta_base_params if p.grad is not None]
                 if meta_grad_list:
                     meta_grad_vec = torch.cat(meta_grad_list)
                     if meta_grad_vec.nelement() > 0:
