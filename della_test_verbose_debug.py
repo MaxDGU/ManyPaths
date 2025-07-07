@@ -140,7 +140,7 @@ def test_step_by_step():
             batch_size=4,
             shuffle=True,
             drop_last=True,
-            pin_memory=(device.type == "cuda"),
+            pin_memory=False,  # Disable pin_memory since collate_fn moves tensors to CUDA
             collate_fn=collate_fn,
         )
         print_debug("  ✅ DataLoader created")

@@ -156,7 +156,7 @@ def main(
         batch_size=tasks_per_meta_batch,
         shuffle=True,
         drop_last=True,
-        pin_memory=(device == "cuda:0"),
+        pin_memory=False,  # Disable pin_memory since collate_fn moves tensors to CUDA
         collate_fn=collate_fn,
     )
     
