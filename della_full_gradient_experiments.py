@@ -29,8 +29,7 @@ def run_single_experiment(config):
         '--first-order',
         '--epochs', str(config['epochs']),
         '--seed', str(config['seed']),
-        '--save',
-        '--results_dir', f"results/grad_align_{name}"
+        '--save'
     ]
     
     print(f"Command: {' '.join(cmd)}")
@@ -63,7 +62,7 @@ def validate_gradient_alignment_data(run_name):
     """Validate gradient alignment data was generated."""
     import pandas as pd
     
-    results_dir = f"results/{run_name}"  # run_name already includes 'grad_align_' prefix
+    results_dir = "results"  # Use default results directory since --results_dir not available
     if not os.path.exists(results_dir):
         return False, "Results directory not found"
     
@@ -71,7 +70,12 @@ def validate_gradient_alignment_data(run_name):
     if not trajectory_files:
         return False, "No trajectory files found"
     
-    latest_file = max(trajectory_files, key=lambda f: os.path.getctime(os.path.join(results_dir, f)))
+    # Look for files that match our experiment pattern
+    matching_files = [f for f in trajectory_files if run_name in f or 'concept_mlp' in f]
+    if not matching_files:
+        return False, f"No trajectory files found matching pattern for {run_name}"
+    
+    latest_file = max(matching_files, key=lambda f: os.path.getctime(os.path.join(results_dir, f)))
     trajectory_path = os.path.join(results_dir, latest_file)
     
     try:

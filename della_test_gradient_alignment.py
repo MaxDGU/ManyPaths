@@ -34,8 +34,7 @@ def test_gradient_alignment_della():
         '--tasks_per_meta_batch', '4',  # Fixed: underscore instead of hyphen
         '--outer_lr', '1e-3',  # Fixed: underscore instead of hyphen
         '--seed', '42',
-        '--save',
-        '--results_dir', 'results/della_grad_test'  # Use results_dir instead of run-name
+        '--save'
     ]
     
     print(f"🚀 Running test command:")
@@ -51,7 +50,7 @@ def test_gradient_alignment_della():
             print(f"✅ Test completed successfully in {duration:.1f}s")
             
             # Check gradient alignment data
-            success, message = check_gradient_data("results/della_grad_test")
+            success, message = check_gradient_data("results")  # Use default results directory
             
             if success:
                 print(f"✅ Gradient alignment validation: {message}")
