@@ -238,6 +238,10 @@ def main(
     file_prefix_parts.append(f"seed{seed}") # Added seed to prefix
     file_prefix_for_run = "_".join(file_prefix_parts)
 
+    # Construct checkpoints directory path
+    checkpoints_fulldir = os.path.join(saved_models_dir, checkpoint_subdir)
+    os.makedirs(checkpoints_fulldir, exist_ok=True)
+
     val_losses, val_accuracies, grad_alignments, best_model_state_at_end, periodic_checkpoints = meta_train(
         meta,
         train_loader,
