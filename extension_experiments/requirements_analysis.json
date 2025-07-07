@@ -1,0 +1,61 @@
+{
+  "total_experiments": 54,
+  "by_priority": {
+    "URGENT": {
+      "count": 12,
+      "total_time_hours": 30.0,
+      "configurations": [
+        "F32_D3",
+        "F16_D3"
+      ]
+    },
+    "HIGH": {
+      "count": 12,
+      "total_time_hours": 30.0,
+      "configurations": [
+        "F16_D5",
+        "F32_D5",
+        "F8_D5"
+      ]
+    },
+    "MEDIUM": {
+      "count": 16,
+      "total_time_hours": 40.0,
+      "configurations": [
+        "F8_D3",
+        "F16_D3"
+      ]
+    },
+    "LOW": {
+      "count": 14,
+      "total_time_hours": 40.0,
+      "configurations": [
+        "F8_D3",
+        "F32_D7",
+        "F8_D7",
+        "F16_D7"
+      ]
+    }
+  },
+  "time_estimates": {},
+  "strategic_recommendations": {
+    "camera_ready_minimum": {
+      "priority": "URGENT",
+      "experiments": 12,
+      "time_hours": 30.0,
+      "justification": "Essential for robust F16_D3 and F32_D3 comparisons"
+    },
+    "comprehensive_coverage": {
+      "priority": "URGENT + HIGH",
+      "experiments": 24,
+      "time_hours": 60.0,
+      "justification": "Complete core grid with architectural depth scaling"
+    },
+    "full_analysis": {
+      "priority": "ALL",
+      "experiments": 54,
+      "time_hours": 140.0,
+      "justification": "Complete experimental coverage including architectures and domains"
+    }
+  }
+}

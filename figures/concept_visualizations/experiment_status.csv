@@ -1,0 +1,10 @@
+config,features,depth,k1_seeds,k10_seeds,status
+F8_D3,8,3,6,4,Complete
+F8_D5,8,5,1,1,Partial
+F8_D7,8,7,1,1,Partial
+F16_D3,16,3,1,1,Partial
+F16_D5,16,5,1,1,Partial
+F16_D7,16,7,1,1,Partial
+F32_D3,32,3,1,1,Partial
+F32_D5,32,5,1,1,Partial
+F32_D7,32,7,1,1,Partial

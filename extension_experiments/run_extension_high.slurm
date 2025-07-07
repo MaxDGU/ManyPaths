@@ -1,0 +1,129 @@
+#!/bin/bash
+#SBATCH --job-name=extension_high
+#SBATCH --output=extension_high_%j.out
+#SBATCH --error=extension_high_%j.err
+#SBATCH --time=37:00:00
+#SBATCH --partition=pli
+#SBATCH --account=nam
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=32G
+#SBATCH --gres=gpu:1
+#SBATCH --mail-type=BEGIN,END,FAIL
+#SBATCH --mail-user=mg7411@princeton.edu
+
+echo "EXTENSION EXPERIMENTS - HIGH PRIORITY"
+echo "Host: $(hostname), Working Dir: $(pwd), Date: $(date)"
+echo "Total experiments: 12"
+echo "Estimated time: 37 hours"
+
+# Load modules
+module load anaconda3/2023.3
+module load cudatoolkit/11.8
+
+# Activate conda environment
+conda activate tensorflow
+export CUDA_VISIBLE_DEVICES=0
+
+echo "============================================"
+echo "Job started at: $(date)"
+echo "Job ID: $SLURM_JOB_ID"
+echo "Node: $(hostname)"
+echo "Working directory: $(pwd)"
+echo "Python version: $(python --version)"
+echo "PyTorch version: $(python -c 'import torch; print(torch.__version__)')"
+echo "CUDA available: $(python -c 'import torch; print(torch.cuda.is_available())')"
+echo "============================================"
+
+# Run experiments
+
+echo "🚀 EXPERIMENT 1/12: k1_f8_d5_s1"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: Depth scaling for simple features"
+timeout 7200 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 8 --pcfg-max-depth 5 --adaptation-steps 1 --epochs 150 --seed 1 --save --no_hyper_search --first-order
+echo "   Completed experiment 1/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 2/12: k1_f8_d5_s2"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: Depth scaling for simple features"
+timeout 7200 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 8 --pcfg-max-depth 5 --adaptation-steps 1 --epochs 150 --seed 2 --save --no_hyper_search --first-order
+echo "   Completed experiment 2/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 3/12: k10_f8_d5_s1"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: Depth scaling for simple features"
+timeout 10800 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 8 --pcfg-max-depth 5 --adaptation-steps 10 --epochs 150 --seed 1 --save --no_hyper_search --first-order
+echo "   Completed experiment 3/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 4/12: k10_f8_d5_s2"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: Depth scaling for simple features"
+timeout 10800 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 8 --pcfg-max-depth 5 --adaptation-steps 10 --epochs 150 --seed 2 --save --no_hyper_search --first-order
+echo "   Completed experiment 4/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 5/12: k1_f16_d5_s1"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: Medium complexity scaling"
+timeout 7200 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 16 --pcfg-max-depth 5 --adaptation-steps 1 --epochs 150 --seed 1 --save --no_hyper_search --first-order
+echo "   Completed experiment 5/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 6/12: k1_f16_d5_s2"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: Medium complexity scaling"
+timeout 7200 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 16 --pcfg-max-depth 5 --adaptation-steps 1 --epochs 150 --seed 2 --save --no_hyper_search --first-order
+echo "   Completed experiment 6/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 7/12: k10_f16_d5_s1"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: Medium complexity scaling"
+timeout 10800 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 16 --pcfg-max-depth 5 --adaptation-steps 10 --epochs 150 --seed 1 --save --no_hyper_search --first-order
+echo "   Completed experiment 7/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 8/12: k10_f16_d5_s2"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: Medium complexity scaling"
+timeout 10800 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 16 --pcfg-max-depth 5 --adaptation-steps 10 --epochs 150 --seed 2 --save --no_hyper_search --first-order
+echo "   Completed experiment 8/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 9/12: k1_f32_d5_s1"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: High complexity scaling"
+timeout 7200 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 32 --pcfg-max-depth 5 --adaptation-steps 1 --epochs 150 --seed 1 --save --no_hyper_search --first-order
+echo "   Completed experiment 9/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 10/12: k1_f32_d5_s2"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: High complexity scaling"
+timeout 7200 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 32 --pcfg-max-depth 5 --adaptation-steps 1 --epochs 150 --seed 2 --save --no_hyper_search --first-order
+echo "   Completed experiment 10/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 11/12: k10_f32_d5_s1"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: High complexity scaling"
+timeout 10800 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 32 --pcfg-max-depth 5 --adaptation-steps 10 --epochs 150 --seed 1 --save --no_hyper_search --first-order
+echo "   Completed experiment 11/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "🚀 EXPERIMENT 12/12: k10_f32_d5_s2"
+echo "   Priority: HIGH, Batch: extended_grid"
+echo "   Justification: High complexity scaling"
+timeout 10800 python main.py --experiment concept --m mlp --data-type bits --num-concept-features 32 --pcfg-max-depth 5 --adaptation-steps 10 --epochs 150 --seed 2 --save --no_hyper_search --first-order
+echo "   Completed experiment 12/12 at $(date)"
+echo "   ----------------------------------------"
+
+echo "============================================"
+echo "HIGH PRIORITY EXPERIMENTS COMPLETED"
+echo "Job finished at: $(date)"
+echo "Total experiments run: 12"
+echo "============================================"
