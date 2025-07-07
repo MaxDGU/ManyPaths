@@ -208,6 +208,7 @@ def hyper_search(
     channels: int = 1,
     bits: int = 8,
     n_output: int = 1,
+    results_dir: str = "results/hyper_search_temp", # Added results_dir parameter
     # Add checkpoint_interval, results_dir, file_prefix to signature if meta_train needs them for hyper_search calls
     # For now, assuming hyper_search's meta_train doesn't need to save these things.
 ):
@@ -233,7 +234,7 @@ def hyper_search(
             patience=5, # Shorter patience for hyper_search
             verbose=False, # Usually less verbose for hyper_search
             checkpoint_interval=epochs + 1, # Effectively disable interval checkpoints for hyper_search meta_train
-            results_dir="results/hyper_search_temp", # Dummy dir
+            results_dir=results_dir, # Use the provided results_dir parameter
             file_prefix=f"hyper_search_idx{index_loop_val}" # Dummy prefix
         )
         current_min_loss = min(val_losses_hyper) if val_losses_hyper else float('inf')

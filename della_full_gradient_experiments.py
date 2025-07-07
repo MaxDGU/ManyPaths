@@ -29,7 +29,8 @@ def run_single_experiment(config):
         '--first-order',
         '--epochs', str(config['epochs']),
         '--seed', str(config['seed']),
-        '--save'
+        '--save',
+        '--no_hyper_search'
     ]
     
     print(f"Command: {' '.join(cmd)}")
