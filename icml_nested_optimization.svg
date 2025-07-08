@@ -1,0 +1,80 @@
+<?xml version="1.0" ?>
+<svg xmlns="http://www.w3.org/2000/svg" width="604.7" height="415.7" viewBox="0 0 604.7 415.7">
+  <style>
+    .title { font-family: Arial, Helvetica, sans-serif; font-size: 11pt; font-weight: bold; text-anchor: middle; }
+    .subtitle { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; text-anchor: middle; fill: #1A1A1A; }
+    .label-8pt { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; text-anchor: middle; fill: #1A1A1A; }
+    .label-9pt { font-family: Arial, Helvetica, sans-serif; font-size: 9pt; text-anchor: middle; }
+    .annotation { font-family: Arial, Helvetica, sans-serif; font-size: 8pt; fill: #1A1A1A; }
+    .italic { font-style: italic; }
+    .bold { font-weight: bold; }
+    </style>
+  <text x="302.3622047244094" y="46.45669291338582" class="title">Nested Optimisation in ManyPaths</text>
+  <text x="302.3622047244094" y="66.45669291338582" class="subtitle">PCFG-Generated Boolean Concepts → Meta-Learning Pipeline</text>
+  <rect x="26.456692913385822" y="156.45669291338584" width="40" height="30" fill="#BFBFBF" stroke="none" rx="2"/>
+  <rect x="26.456692913385822" y="156.45669291338584" width="3.2" height="30" fill="#0F9D9D" stroke="none" rx="2"/>
+  <text x="46.45669291338582" y="131.45669291338584" class="label-8pt">F8D3</text>
+  <text x="46.45669291338582" y="146.45669291338584" class="label-8pt">(2.8, 2.8)</text>
+  <text x="46.45669291338582" y="201.45669291338584" class="label-8pt">Simple</text>
+  <rect x="154.4094488188976" y="151.45669291338584" width="40" height="35" fill="#BFBFBF" stroke="none" rx="2"/>
+  <rect x="154.4094488188976" y="151.45669291338584" width="3.2" height="35" fill="#0F9D9D" stroke="none" rx="2"/>
+  <text x="174.4094488188976" y="126.45669291338584" class="label-8pt">F16D3</text>
+  <text x="174.4094488188976" y="141.45669291338584" class="label-8pt">(2.7, 2.8)</text>
+  <text x="174.4094488188976" y="201.45669291338584" class="label-8pt">Simple+</text>
+  <rect x="282.3622047244094" y="141.45669291338584" width="40" height="45" fill="#BFBFBF" stroke="none" rx="2"/>
+  <rect x="282.3622047244094" y="141.45669291338584" width="3.2" height="45" fill="#0F9D9D" stroke="none" rx="2"/>
+  <text x="302.3622047244094" y="116.45669291338584" class="label-8pt">F8D5</text>
+  <text x="302.3622047244094" y="131.45669291338584" class="label-8pt">(4.8, 3.8)</text>
+  <text x="302.3622047244094" y="201.45669291338584" class="label-8pt">Medium</text>
+  <rect x="410.3149606299212" y="136.45669291338584" width="40" height="50" fill="#BFBFBF" stroke="none" rx="2"/>
+  <rect x="410.3149606299212" y="136.45669291338584" width="3.2" height="50" fill="#0F9D9D" stroke="none" rx="2"/>
+  <text x="430.3149606299212" y="111.45669291338584" class="label-8pt">F16D5</text>
+  <text x="430.3149606299212" y="126.45669291338584" class="label-8pt">(4.7, 3.9)</text>
+  <text x="430.3149606299212" y="201.45669291338584" class="label-8pt">Medium+</text>
+  <rect x="538.267716535433" y="126.45669291338584" width="40" height="60" fill="#BFBFBF" stroke="none" rx="2"/>
+  <rect x="538.267716535433" y="126.45669291338584" width="3.2" height="60" fill="#0F9D9D" stroke="none" rx="2"/>
+  <text x="558.267716535433" y="101.45669291338584" class="label-8pt">F8D7</text>
+  <text x="558.267716535433" y="116.45669291338584" class="label-8pt">(7.4, 4.8)</text>
+  <text x="558.267716535433" y="201.45669291338584" class="label-8pt">Complex</text>
+  <path d="M 46.45669291338582 156.45669291338584 Q 46.45669291338582 196.45669291338584 302.3622047244094 236.45669291338584" fill="none" stroke="#1A1A1A" stroke-width="0.4" marker-end="url(#arrowhead)"/>
+  <path d="M 174.4094488188976 151.45669291338584 Q 174.4094488188976 193.95669291338584 302.3622047244094 236.45669291338584" fill="none" stroke="#1A1A1A" stroke-width="0.4" marker-end="url(#arrowhead)"/>
+  <path d="M 302.3622047244094 141.45669291338584 Q 302.3622047244094 188.95669291338584 302.3622047244094 236.45669291338584" fill="none" stroke="#1A1A1A" stroke-width="0.4" marker-end="url(#arrowhead)"/>
+  <path d="M 430.3149606299212 136.45669291338584 Q 430.3149606299212 186.45669291338584 302.3622047244094 236.45669291338584" fill="none" stroke="#1A1A1A" stroke-width="0.4" marker-end="url(#arrowhead)"/>
+  <path d="M 558.267716535433 126.45669291338584 Q 558.267716535433 181.45669291338584 302.3622047244094 236.45669291338584" fill="none" stroke="#1A1A1A" stroke-width="0.4" marker-end="url(#arrowhead)"/>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <path d="M 0 0 L 10 3.5 L 0 7 z" fill="#1A1A1A"/>
+    </marker>
+  </defs>
+  <text x="252.36220472440942" y="221.45669291338584" class="annotation italic">Task Distribution</text>
+  <rect x="202.36220472440942" y="236.45669291338584" width="200" height="80" fill="none" stroke="#0F9D9D" stroke-width="0.6" rx="8"/>
+  <circle cx="262.3622047244094" cy="261.45669291338584" r="4" fill="none" stroke="#0F9D9D" stroke-width="0.6"/>
+  <circle cx="262.3622047244094" cy="276.45669291338584" r="4" fill="none" stroke="#0F9D9D" stroke-width="0.6"/>
+  <circle cx="262.3622047244094" cy="291.45669291338584" r="4" fill="none" stroke="#0F9D9D" stroke-width="0.6"/>
+  <circle cx="302.3622047244094" cy="261.45669291338584" r="4" fill="none" stroke="#0F9D9D" stroke-width="0.6"/>
+  <circle cx="302.3622047244094" cy="276.45669291338584" r="4" fill="none" stroke="#0F9D9D" stroke-width="0.6"/>
+  <circle cx="302.3622047244094" cy="291.45669291338584" r="4" fill="none" stroke="#0F9D9D" stroke-width="0.6"/>
+  <circle cx="342.3622047244094" cy="276.45669291338584" r="4" fill="none" stroke="#0F9D9D" stroke-width="0.6"/>
+  <line x1="266.3622047244094" y1="261.45669291338584" x2="298.3622047244094" y2="261.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="266.3622047244094" y1="261.45669291338584" x2="298.3622047244094" y2="276.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="266.3622047244094" y1="261.45669291338584" x2="298.3622047244094" y2="291.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="266.3622047244094" y1="276.45669291338584" x2="298.3622047244094" y2="261.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="266.3622047244094" y1="276.45669291338584" x2="298.3622047244094" y2="276.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="266.3622047244094" y1="276.45669291338584" x2="298.3622047244094" y2="291.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="266.3622047244094" y1="291.45669291338584" x2="298.3622047244094" y2="261.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="266.3622047244094" y1="291.45669291338584" x2="298.3622047244094" y2="276.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="266.3622047244094" y1="291.45669291338584" x2="298.3622047244094" y2="291.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="306.3622047244094" y1="261.45669291338584" x2="338.3622047244094" y2="276.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="306.3622047244094" y1="276.45669291338584" x2="338.3622047244094" y2="276.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <line x1="306.3622047244094" y1="291.45669291338584" x2="338.3622047244094" y2="276.45669291338584" stroke="#1A1A1A" stroke-width="0.2" opacity="0.3"/>
+  <text x="302.3622047244094" y="331.45669291338584" class="label-8pt">MLP</text>
+  <text x="192.36220472440942" y="276.45669291338584" class="annotation" text-anchor="end">Adapt MLP parameters for each concept</text>
+  <line x1="302.3622047244094" y1="316.45669291338584" x2="302.3622047244094" y2="356.45669291338584" stroke="#1A1A1A" stroke-width="0.4" marker-end="url(#arrowhead)"/>
+  <text x="322.3622047244094" y="336.45669291338584" class="annotation italic">Gradients</text>
+  <rect x="60.47244094488187" y="356.45669291338584" width="483.7795275590551" height="40" fill="#0F9D9D" fill-opacity="0.08" stroke="#0F9D9D" stroke-width="0.6" rx="8"/>
+  <text x="302.3622047244094" y="379.45669291338584" class="label-9pt bold">Meta-Optimizer (MetaSGD)</text>
+  <text x="60.47244094488187" y="411.45669291338584" class="annotation">Update meta-parameters using gradients</text>
+  <text x="6.456692913385822" y="136.45669291338584" class="label-9pt" fill="#0F9D9D">①</text>
+  <text x="6.456692913385822" y="276.45669291338584" class="label-9pt" fill="#0F9D9D">②</text>
+  <text x="6.456692913385822" y="376.45669291338584" class="label-9pt" fill="#0F9D9D">③</text>
+</svg>

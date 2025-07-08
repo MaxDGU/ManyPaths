@@ -1,0 +1,68 @@
+<?xml version="1.0" ?>
+<svg xmlns="http://www.w3.org/2000/svg" width="566.9" height="340.2" viewBox="0 0 566.9 340.2">
+  <style>
+    .main-title { font-family: Helvetica, Arial, sans-serif; font-size: 11pt; font-weight: bold; text-anchor: middle; }
+    .panel-title { font-family: Helvetica, Arial, sans-serif; font-size: 10pt; font-weight: bold; text-anchor: middle; }
+    .label-text { font-family: Helvetica, Arial, sans-serif; font-size: 8pt; text-anchor: middle; fill: #333; }
+    .node-text { font-family: Helvetica, Arial, sans-serif; font-size: 8pt; text-anchor: middle; fill: #333; }
+    .example-text { font-family: Helvetica, Arial, sans-serif; font-size: 8pt; text-anchor: middle; }
+    .caption-text { font-family: Helvetica, Arial, sans-serif; font-size: 8pt; text-anchor: middle; fill: #666; }
+    </style>
+  <text x="283.46456692913387" y="14" class="main-title">Anatomy of a Meta-Learning Episode</text>
+  <text x="146.48228346456693" y="34" class="panel-title">Boolean Concept</text>
+  <g>
+    <rect x="134.48228346456693" y="88.0" width="24" height="12" fill="#0F9D9D" stroke="#333333" stroke-width="0.5" rx="3"/>
+    <text x="146.48228346456693" y="97" class="node-text" fill="white">NOT</text>
+    <line x1="146.48228346456693" y1="100.0" x2="146.48228346456693" y2="125.28937007874015" stroke="#333333" stroke-width="0.5"/>
+    <rect x="134.48228346456693" y="131.28937007874015" width="24" height="12" fill="#0F9D9D" stroke="#333333" stroke-width="0.5" rx="3"/>
+    <text x="146.48228346456693" y="140.28937007874015" class="node-text" fill="white">OR</text>
+    <line x1="146.48228346456693" y1="143.28937007874015" x2="87.74114173228347" y2="168.5787401574803" stroke="#333333" stroke-width="0.5"/>
+    <line x1="146.48228346456693" y1="143.28937007874015" x2="205.2234251968504" y2="168.5787401574803" stroke="#333333" stroke-width="0.5"/>
+    <rect x="75.74114173228347" y="174.5787401574803" width="24" height="12" fill="#0F9D9D" stroke="#333333" stroke-width="0.5" rx="3"/>
+    <text x="87.74114173228347" y="183.5787401574803" class="node-text" fill="white">AND</text>
+    <line x1="87.74114173228347" y1="186.5787401574803" x2="58.37057086614173" y2="211.86811023622045" stroke="#333333" stroke-width="0.5"/>
+    <line x1="87.74114173228347" y1="186.5787401574803" x2="117.1117125984252" y2="211.86811023622045" stroke="#333333" stroke-width="0.5"/>
+    <rect x="46.37057086614173" y="217.86811023622045" width="24" height="12" fill="#0F9D9D" stroke="#333333" stroke-width="0.5" rx="3"/>
+    <text x="58.37057086614173" y="226.86811023622045" class="node-text" fill="white">OR</text>
+    <line x1="58.37057086614173" y1="229.86811023622045" x2="43.68528543307087" y2="255.1574803149606" stroke="#333333" stroke-width="0.5"/>
+    <line x1="58.37057086614173" y1="229.86811023622045" x2="73.05585629921259" y2="255.1574803149606" stroke="#333333" stroke-width="0.5"/>
+    <circle cx="43.68528543307087" cy="267.1574803149606" r="12" fill="white" stroke="#333333" stroke-width="0.5"/>
+    <text x="43.68528543307087" y="270.1574803149606" class="node-text">x1</text>
+    <circle cx="73.05585629921259" cy="267.1574803149606" r="12" fill="white" stroke="#333333" stroke-width="0.5"/>
+    <text x="73.05585629921259" y="270.1574803149606" class="node-text">x6</text>
+    <rect x="105.1117125984252" y="217.86811023622045" width="24" height="12" fill="#0F9D9D" stroke="#333333" stroke-width="0.5" rx="3"/>
+    <text x="117.1117125984252" y="226.86811023622045" class="node-text" fill="white">OR</text>
+    <line x1="117.1117125984252" y1="229.86811023622045" x2="102.42642716535434" y2="255.1574803149606" stroke="#333333" stroke-width="0.5"/>
+    <line x1="117.1117125984252" y1="229.86811023622045" x2="131.79699803149606" y2="255.1574803149606" stroke="#333333" stroke-width="0.5"/>
+    <circle cx="102.42642716535434" cy="267.1574803149606" r="12" fill="white" stroke="#333333" stroke-width="0.5"/>
+    <text x="102.42642716535434" y="270.1574803149606" class="node-text">x3</text>
+    <circle cx="131.79699803149606" cy="267.1574803149606" r="12" fill="white" stroke="#333333" stroke-width="0.5"/>
+    <text x="131.79699803149606" y="270.1574803149606" class="node-text">x0</text>
+    <circle cx="205.2234251968504" cy="180.5787401574803" r="12" fill="white" stroke="#333333" stroke-width="0.5"/>
+    <text x="205.2234251968504" y="183.5787401574803" class="node-text">x6</text>
+  </g>
+  <text x="146.48228346456693" y="287.15748031496065" class="caption-text">Sampled from PCFG Grammar</text>
+  <text x="146.48228346456693" y="302.15748031496065" class="caption-text">(¬((((x_1 ∨ x_6)</text>
+  <text x="146.48228346456693" y="317.15748031496065" class="caption-text">∧ (x_3 ∨ x_0)) ∨ x_6)))</text>
+  <line x1="283.46456692913387" y1="34" x2="283.46456692913387" y2="317.15748031496065" stroke="#CCCCCC" stroke-width="0.3"/>
+  <text x="420.4468503937008" y="34" class="panel-title">Support &amp; Query Examples</text>
+  <rect x="292.96456692913387" y="64" width="120" height="25" fill="#0F9D9D" stroke="#333333" stroke-width="0.5" rx="3"/>
+  <text x="352.96456692913387" y="79.5" class="example-text" fill="white">1 0 0 1 1 0 0 1</text>
+  <text x="352.96456692913387" y="59" class="label-text">S</text>
+  <rect x="427.96456692913387" y="64" width="120" height="25" fill="#0F9D9D" stroke="#333333" stroke-width="0.5" rx="3"/>
+  <text x="487.96456692913387" y="79.5" class="example-text" fill="white">0 1 1 0 1 1 0 1</text>
+  <text x="487.96456692913387" y="59" class="label-text">S</text>
+  <rect x="292.96456692913387" y="104" width="120" height="25" fill="#DDDDDD" stroke="#333333" stroke-width="0.5" rx="3"/>
+  <text x="352.96456692913387" y="119.5" class="example-text" fill="#333333">1 1 1 1 0 1 1 0</text>
+  <text x="352.96456692913387" y="99" class="label-text">S</text>
+  <rect x="427.96456692913387" y="104" width="120" height="25" fill="#0F9D9D" stroke="#333333" stroke-width="0.5" rx="3"/>
+  <text x="487.96456692913387" y="119.5" class="example-text" fill="white">0 0 0 0 0 0 0 0</text>
+  <text x="487.96456692913387" y="99" class="label-text">Q</text>
+  <rect x="292.96456692913387" y="144" width="120" height="25" fill="#DDDDDD" stroke="#333333" stroke-width="0.5" rx="3"/>
+  <text x="352.96456692913387" y="159.5" class="example-text" fill="#333333">0 0 0 0 1 0 1 0</text>
+  <text x="352.96456692913387" y="139" class="label-text">Q</text>
+  <rect x="302.96456692913387" y="204" width="15" height="12" fill="#0F9D9D" stroke="#333333" stroke-width="0.5"/>
+  <text x="322.96456692913387" y="213" class="label-text" text-anchor="start">Positive</text>
+  <rect x="302.96456692913387" y="222" width="15" height="12" fill="#DDDDDD" stroke="#333333" stroke-width="0.5"/>
+  <text x="322.96456692913387" y="231" class="label-text" text-anchor="start">Negative</text>
+</svg>
