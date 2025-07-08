@@ -384,7 +384,6 @@ if __name__ == "__main__":
     
     parser.add_argument("--num-tasks-to-evaluate", type=int, default=100, help="Number of distinct tasks to process (used if not loading fixed set, or as max if loader is shorter).")
     parser.add_argument("--num-sgd-steps-per-task", type=int, default=100, help="Number of SGD steps on the support set of each task.")
-    parser.add_argument("--lr", type=float, default=1e-3, help="Learning rate for AdamW optimizer.")
     
     parser.add_argument("--num-concept-features", type=int, default=8, help="Number of features for concept learning.")
     parser.add_argument("--pcfg-max-depth", type=int, default=PCFG_DEFAULT_MAX_DEPTH, help="Max depth for PCFG concept generation.")
