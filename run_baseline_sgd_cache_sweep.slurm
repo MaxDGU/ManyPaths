@@ -133,6 +133,7 @@ python main_baseline_sgd.py \
     --epochs ${NUM_SGD_STEPS_PER_TASK} \
     --lr ${LR_BASELINE} \
     --run-name "${RUN_NAME_PREFIX}" \
+    --no-save-task-models \
     --verbose
 
 EXIT_CODE=$?
