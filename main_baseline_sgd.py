@@ -239,25 +239,82 @@ def main(
             if cached_tasks:
                 # Handle cached task format
                 task_data = next(dataset_iterator)
+                
+                # Debug: Print task data structure for first task
+                if task_idx == 0 and verbose:
+                    print(f"   Task data type: {type(task_data)}")
+                    if isinstance(task_data, (tuple, list)):
+                        print(f"   Task data length: {len(task_data)}")
+                        for i, item in enumerate(task_data):
+                            print(f"   Item {i}: {type(item)} shape: {getattr(item, 'shape', 'N/A')}")
+                    elif isinstance(task_data, dict):
+                        print(f"   Task data keys: {task_data.keys()}")
+                
                 if isinstance(task_data, dict):
-                    X_s, y_s, X_q, y_q = task_data['support_x'], task_data['support_y'], task_data['query_x'], task_data['query_y']
+                    # Dictionary format
+                    X_s = task_data.get('support_x', task_data.get('support_X'))
+                    y_s = task_data.get('support_y', task_data.get('support_Y'))
+                    X_q = task_data.get('query_x', task_data.get('query_X'))
+                    y_q = task_data.get('query_y', task_data.get('query_Y'))
+                    
+                    if X_s is None or y_s is None or X_q is None or y_q is None:
+                        print(f"ERROR: Missing required keys in task dict at task {task_idx}")
+                        print(f"Available keys: {task_data.keys()}")
+                        actual_num_tasks_to_evaluate = task_idx
+                        break
+                        
+                elif isinstance(task_data, (tuple, list)):
+                    # Tuple/list format - handle different lengths
+                    if len(task_data) == 4:
+                        X_s, y_s, X_q, y_q = task_data
+                    elif len(task_data) == 5:
+                        # Sometimes there's an extra metadata element
+                        X_s, y_s, X_q, y_q, _ = task_data
+                    elif len(task_data) == 6:
+                        # Sometimes format is (X_s, y_s, X_q, y_q, task_info, concept_info)
+                        X_s, y_s, X_q, y_q, _, _ = task_data
+                    elif len(task_data) == 2:
+                        # Format might be ((X_s, y_s), (X_q, y_q))
+                        (X_s, y_s), (X_q, y_q) = task_data
+                    else:
+                        print(f"ERROR: Unexpected task data length {len(task_data)} at task {task_idx}")
+                        print(f"Task data: {[type(x) for x in task_data]}")
+                        actual_num_tasks_to_evaluate = task_idx
+                        break
                 else:
-                    X_s, y_s, X_q, y_q = task_data
+                    print(f"ERROR: Unexpected task data type {type(task_data)} at task {task_idx}")
+                    actual_num_tasks_to_evaluate = task_idx
+                    break
+                
                 # Ensure proper tensor format and device
-                X_s = X_s.to(device)
-                y_s = y_s.to(device)
-                X_q = X_q.to(device)
-                y_q = y_q.to(device)
+                X_s = torch.as_tensor(X_s, dtype=torch.float32).to(device)
+                y_s = torch.as_tensor(y_s, dtype=torch.float32).to(device)
+                X_q = torch.as_tensor(X_q, dtype=torch.float32).to(device)
+                y_q = torch.as_tensor(y_q, dtype=torch.float32).to(device)
+                
+                # Ensure proper dimensions
+                if X_s.dim() == 1:
+                    X_s = X_s.unsqueeze(0)
+                if y_s.dim() == 1:
+                    y_s = y_s.unsqueeze(0)
+                if X_q.dim() == 1:
+                    X_q = X_q.unsqueeze(0)
+                if y_q.dim() == 1:
+                    y_q = y_q.unsqueeze(0)
+                    
             else:
                 # Handle regular dataset format
                 X_s, y_s, X_q, y_q = next(dataset_iterator)
                 X_s, y_s, X_q, y_q = X_s.squeeze(0), y_s.squeeze(0), X_q.squeeze(0), y_q.squeeze(0)
+                
         except StopIteration:
             print(f"Warning: Dataset iterator exhausted at task_idx {task_idx}. Processed {task_idx} tasks.")
             actual_num_tasks_to_evaluate = task_idx # Update to actual number processed
             break
         except Exception as e:
             print(f"ERROR: Failed to get next task data at task_idx {task_idx}. Error: {e}")
+            if task_idx == 0:
+                print(f"   This might be a cache format issue. Try running with --verbose for more details.")
             actual_num_tasks_to_evaluate = task_idx
             break
 
