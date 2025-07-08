@@ -273,6 +273,28 @@ def main(
                     elif len(task_data) == 6:
                         # Sometimes format is (X_s, y_s, X_q, y_q, task_info, concept_info)
                         X_s, y_s, X_q, y_q, _, _ = task_data
+                    elif len(task_data) == 9:
+                        # Format: (support_X_pos, support_X_neg, support_Y_pos, query_X_pos, query_X_neg, query_Y_pos, n_support, complexity, concept_id)
+                        support_X_pos, support_X_neg, support_Y_pos, query_X_pos, query_X_neg, query_Y_pos, n_support, complexity, concept_id = task_data
+                        
+                        # Combine positive and negative support examples
+                        X_s = torch.cat([support_X_pos, support_X_neg], dim=0)
+                        # Create labels: positive examples get label 1, negative examples get label 0
+                        y_s_pos = torch.ones(support_X_pos.shape[0], 1)
+                        y_s_neg = torch.zeros(support_X_neg.shape[0], 1)
+                        y_s = torch.cat([y_s_pos, y_s_neg], dim=0)
+                        
+                        # Combine positive and negative query examples
+                        X_q = torch.cat([query_X_pos, query_X_neg], dim=0)
+                        # Create labels: positive examples get label 1, negative examples get label 0
+                        y_q_pos = torch.ones(query_X_pos.shape[0], 1)
+                        y_q_neg = torch.zeros(query_X_neg.shape[0], 1)
+                        y_q = torch.cat([y_q_pos, y_q_neg], dim=0)
+                        
+                        if verbose:
+                            print(f"    Task {task_idx+1}: Processed 9-element format")
+                            print(f"      Support set: {X_s.shape}, Query set: {X_q.shape}")
+                            print(f"      Complexity: {complexity}, Concept ID: {concept_id}")
                     elif len(task_data) == 2:
                         # Format might be ((X_s, y_s), (X_q, y_q))
                         (X_s, y_s), (X_q, y_q) = task_data
