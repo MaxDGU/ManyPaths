@@ -48,7 +48,7 @@ class CameraReadyAnalyzer:
     def load_della_results(self, logs_dir: str = "logs"):
         """Load and parse Della camera_ready_array results"""
         logs_path = Path(logs_dir)
-        camera_ready_files = list(logs_path.glob("camera_ready_array_*"))
+        camera_ready_files = list(logs_path.glob("camera_ready_array_*_*.out"))
         
         print(f"Found {len(camera_ready_files)} camera-ready log files")
         

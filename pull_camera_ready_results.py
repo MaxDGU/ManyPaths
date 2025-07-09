@@ -68,7 +68,7 @@ class DellaResultsPuller:
         try:
             result = subprocess.run([
                 "ssh", f"{self.della_user}@della-gpu.princeton.edu", 
-                f"cd {self.della_path} && find logs/ -name 'camera_ready_array_*' | head -10"
+                f"cd {self.della_path} && find logs/ -name 'camera_ready_array_*_*.out' | head -20"
             ], capture_output=True, text=True, timeout=30)
             
             if result.returncode == 0:
@@ -102,7 +102,7 @@ class DellaResultsPuller:
                 compress_cmd = [
                     "ssh", f"{self.della_user}@della-gpu.princeton.edu",
                     f"cd {self.della_path} && tar -czf camera_ready_results.tar.gz "
-                    f"logs/camera_ready_array_* results/ saved_models/ || true"
+                    f"logs/camera_ready_array_*_*.out results/ saved_models/ || true"
                 ]
                 
                 result = subprocess.run(compress_cmd, capture_output=True, text=True, timeout=300)
@@ -140,7 +140,7 @@ class DellaResultsPuller:
                 print("   Using rsync to pull results...")
                 rsync_cmd = [
                     "rsync", "-avz", "--progress",
-                    f"{self.della_user}@della-gpu.princeton.edu:{self.della_path}/logs/camera_ready_array_*",
+                    f"{self.della_user}@della-gpu.princeton.edu:{self.della_path}/logs/camera_ready_array_*_*.out",
                     str(self.local_results_dir / "logs/")
                 ]
                 
