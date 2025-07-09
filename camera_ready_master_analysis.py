@@ -1,19 +1,31 @@
 #!/usr/bin/env python3
 """
-Camera-Ready Master Analysis Script
-Consolidates all ManyPaths analyses with clean, publication-ready visualizations
+Camera-Ready Master Analysis Script for ManyPaths Paper
+
+This script consolidates all camera-ready analyses into a single, clean pipeline.
+It processes Della results and generates publication-ready figures and reports.
+
+Usage:
+    python camera_ready_master_analysis.py
+
+Outputs:
+    - Clean trajectory plots
+    - K=1 vs K=10 comparisons  
+    - Statistical summaries
+    - Sample efficiency analysis
+    - Comprehensive camera-ready report
 """
 
-import os
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
-import json
 import re
+from typing import Dict, List, Optional, Tuple
+from datetime import datetime
 from scipy import stats
-from typing import Dict, List, Tuple, Optional
+import argparse
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -45,109 +57,156 @@ class CameraReadyAnalyzer:
         sns.set_palette(FIGURE_CONFIG['color_palette'])
         plt.rcParams.update({'font.size': FIGURE_CONFIG['font_size']})
         
-    def load_della_results(self, logs_dir: str = "logs"):
-        """Load and parse Della camera_ready_array results"""
+    def load_della_results(self) -> int:
+        """Load and parse all camera-ready results from Della logs"""
+        print("1. Loading Della results...")
+        
+        # Find camera-ready log files
+        search_paths = ['.', 'logs']
         camera_ready_files = []
         
-        # Search in multiple locations: current directory and logs directory
-        search_paths = [Path("."), Path(logs_dir)]
-        
         for search_path in search_paths:
-            if search_path.exists():
-                files = list(search_path.glob("camera_ready_array_*_*.out"))
-                camera_ready_files.extend(files)
+            path_obj = Path(search_path)
+            if path_obj.exists():
+                files = list(path_obj.glob('camera_ready_array_*_*.out'))
                 print(f"Found {len(files)} camera-ready files in {search_path}")
+                camera_ready_files.extend(files)
         
         print(f"Total found: {len(camera_ready_files)} camera-ready log files")
         
+        if not camera_ready_files:
+            print("❌ No camera-ready log files found")
+            return 0
+        
+        # Parse each log file
+        parsed_experiments = []
         for log_file in camera_ready_files:
             try:
-                self._parse_della_log(log_file)
+                experiment_data = self._parse_log_file(log_file)
+                if experiment_data:
+                    parsed_experiments.append(experiment_data)
             except Exception as e:
                 print(f"Error parsing {log_file}: {e}")
-                continue
-                
-        return len(camera_ready_files)
-    
-    def _parse_della_log(self, log_file: Path):
-        """Parse individual Della log file"""
-        # Extract job info from filename
-        match = re.search(r'camera_ready_array_(\d+)_(\d+)\.out', log_file.name)
-        if not match:
-            return
-            
-        job_id, array_id = match.groups()
         
-        with open(log_file, 'r') as f:
-            content = f.read()
-            
-        # Parse experimental configuration
-        config = self._extract_config(content)
-        if not config:
-            return
-            
-        # Parse trajectory data
-        trajectory = self._extract_trajectory(content)
+        print(f"   Loaded {len(camera_ready_files)} log files")
+        print(f"   Parsed {len(parsed_experiments)} experiments")
         
-        # Parse final performance
-        performance = self._extract_performance(content)
-        
-        # Store data
-        key = f"{config['features']}D{config['depth']}_K{config['adaptation_steps']}_seed{config['seed']}"
-        
-        self.trajectory_data[key] = {
-            'config': config,
-            'trajectory': trajectory,
-            'performance': performance,
-            'job_info': {'job_id': job_id, 'array_id': array_id}
-        }
-    
-    def _extract_config(self, content: str) -> Optional[Dict]:
-        """Extract experimental configuration from log content"""
-        try:
-            # Look for configuration patterns
-            features_match = re.search(r'num-concept-features (\d+)', content)
-            depth_match = re.search(r'pcfg-max-depth (\d+)', content)
-            adapt_match = re.search(r'adaptation-steps (\d+)', content)
-            seed_match = re.search(r'seed (\d+)', content)
+        # Store experiments in trajectory_data format for compatibility
+        self.trajectory_data = {}
+        for exp in parsed_experiments:
+            # Create key in format: F16D3_K10_seed1
+            key = f"{exp['complexity']}_K{exp['k_value']}_seed{exp['seed']}"
             
-            if all([features_match, depth_match, adapt_match, seed_match]):
-                return {
-                    'features': int(features_match.group(1)),
-                    'depth': int(depth_match.group(1)),
-                    'adaptation_steps': int(adapt_match.group(1)),
-                    'seed': int(seed_match.group(1))
+            self.trajectory_data[key] = {
+                'config': exp['config'],
+                'trajectory': exp['trajectory'],
+                'performance': {'final_accuracy': exp['final_accuracy']},
+                'experiment_info': {
+                    'experiment_id': exp['experiment_id'],
+                    'status': exp['status'],
+                    'log_file': exp['log_file']
                 }
-        except:
-            pass
-        return None
-    
-    def _extract_trajectory(self, content: str) -> List[Dict]:
-        """Extract training trajectory from log content"""
-        trajectory = []
+            }
         
-        # Look for trajectory patterns
-        trajectory_pattern = r'Episode (\d+).*?Validation.*?accuracy: ([\d.]+)'
-        matches = re.findall(trajectory_pattern, content, re.DOTALL)
-        
-        for episode, accuracy in matches:
-            trajectory.append({
-                'episode': int(episode),
-                'accuracy': float(accuracy)
-            })
-                
-        return trajectory
+        return len(parsed_experiments)
     
-    def _extract_performance(self, content: str) -> Dict:
-        """Extract final performance metrics"""
+    def _parse_log_file(self, file_path):
+        """Parse a single SLURM log file to extract experiment data"""
         try:
-            # Look for final accuracy
-            final_acc_match = re.search(r'Final.*?accuracy.*?([\d.]+)', content)
-            if final_acc_match:
-                return {'final_accuracy': float(final_acc_match.group(1))}
-        except:
-            pass
-        return {}
+            with open(file_path, 'r') as f:
+                content = f.read()
+            
+            # Extract experiment configuration from the header
+            experiment_match = re.search(r'🧠 EXPERIMENT: ([A-Z0-9_]+)', content)
+            if not experiment_match:
+                print(f"❌ No experiment header found in {file_path}")
+                return None
+            
+            experiment_id = experiment_match.group(1)
+            print(f"📋 Found experiment: {experiment_id}")
+            
+            # Parse experiment components (e.g., F16D3_K10_S1)
+            exp_parts = experiment_id.split('_')
+            if len(exp_parts) != 3:
+                print(f"❌ Unexpected experiment format: {experiment_id}")
+                return None
+            
+            complexity, k_steps, seed_part = exp_parts
+            k_value = int(k_steps[1:])  # Extract number from K10 -> 10
+            seed = int(seed_part[1:])   # Extract number from S1 -> 1
+            
+            # Extract configuration from arguments line
+            config_match = re.search(r'Arguments parsed: Namespace\(([^)]+)\)', content)
+            if not config_match:
+                print(f"❌ No configuration found in {file_path}")
+                return None
+            
+            config_str = config_match.group(1)
+            
+            # Parse individual config values
+            features_match = re.search(r'num_concept_features=(\d+)', config_str)
+            depth_match = re.search(r'pcfg_max_depth=(\d+)', config_str)
+            adapt_match = re.search(r'adaptation_steps=(\d+)', config_str)
+            seed_match = re.search(r'seed=(\d+)', config_str)
+            
+            if not all([features_match, depth_match, adapt_match, seed_match]):
+                print(f"❌ Missing configuration parameters in {file_path}")
+                return None
+            
+            config = {
+                'features': int(features_match.group(1)),
+                'depth': int(depth_match.group(1)),
+                'adaptation_steps': int(adapt_match.group(1)),
+                'seed': int(seed_match.group(1))
+            }
+            
+            # Extract trajectory data
+            trajectory_data = []
+            
+            # Look for training progress lines with MetaValAcc
+            trajectory_matches = re.findall(
+                r'Epoch (\d+), Batch \d+, Episodes Seen: (\d+), .*?MetaValAcc: ([\d.]+)', 
+                content
+            )
+            
+            for epoch, episodes, accuracy in trajectory_matches:
+                trajectory_data.append({
+                    'epoch': int(epoch),
+                    'episodes': int(episodes),
+                    'accuracy': float(accuracy)
+                })
+            
+            print(f"📊 Found {len(trajectory_data)} trajectory points")
+            
+            if not trajectory_data:
+                print(f"❌ No trajectory data found in {file_path}")
+                return None
+            
+            # Since there's no final test evaluation, use the last validation accuracy
+            final_accuracy = trajectory_data[-1]['accuracy'] if trajectory_data else 0.0
+            
+            # Check if experiment completed successfully
+            success_match = re.search(r'✅ SUCCESS.*completed', content)
+            status = 'completed' if success_match else 'incomplete'
+            
+            experiment_data = {
+                'experiment_id': experiment_id,
+                'complexity': complexity,
+                'k_value': k_value,
+                'seed': seed,
+                'config': config,
+                'trajectory': trajectory_data,
+                'final_accuracy': final_accuracy,
+                'status': status,
+                'log_file': str(file_path)
+            }
+            
+            print(f"✅ Parsed: {experiment_id} - {len(trajectory_data)} points, final acc: {final_accuracy:.4f}")
+            return experiment_data
+            
+        except Exception as e:
+            print(f"❌ Error parsing {file_path}: {e}")
+            return None
     
     def generate_clean_trajectories(self):
         """Generate clean trajectory plots"""
@@ -205,176 +264,267 @@ class CameraReadyAnalyzer:
         ax.grid(True, alpha=0.3)
     
     def generate_k_comparison(self):
-        """Generate K=1 vs K=10 comparison"""
-        configs = ['F8D3', 'F16D3', 'F32D3']
+        """Generate K=1 vs K=10 comparison analysis"""
+        print("3. Generating K=1 vs K=10 comparison...")
         
+        if not self.trajectory_data:
+            print("❌ No trajectory data available for K comparison")
+            return None
+        
+        # Debug: show what experiments we actually have
+        print(f"📊 Available experiments:")
+        for key in sorted(self.trajectory_data.keys()):
+            exp = self.trajectory_data[key]
+            final_acc = exp['performance']['final_accuracy']
+            print(f"   {key}: final_acc = {final_acc:.4f}")
+        
+        # Group experiments by complexity and collect K=1 vs K=10 pairs
+        complexity_groups = {}
+        
+        for key, exp_data in self.trajectory_data.items():
+            # Parse key format: F16D3_K10_seed1
+            parts = key.split('_')
+            if len(parts) < 3:
+                continue
+                
+            complexity = parts[0]  # F16D3
+            k_part = parts[1]      # K10
+            seed_part = parts[2]   # seed1
+            
+            if not k_part.startswith('K'):
+                continue
+                
+            k_value = int(k_part[1:])  # Extract 10 from K10
+            
+            if complexity not in complexity_groups:
+                complexity_groups[complexity] = {'K1': [], 'K10': []}
+            
+            k_key = f'K{k_value}'
+            if k_key in complexity_groups[complexity]:
+                complexity_groups[complexity][k_key].append({
+                    'key': key,
+                    'final_accuracy': exp_data['performance']['final_accuracy'],
+                    'trajectory': exp_data['trajectory']
+                })
+        
+        print(f"📊 Complexity groups found:")
+        for complexity, data in complexity_groups.items():
+            k1_count = len(data['K1'])
+            k10_count = len(data['K10'])
+            print(f"   {complexity}: K1={k1_count} experiments, K10={k10_count} experiments")
+        
+        # Generate comparison plots and statistics
         comparison_data = []
         
-        for config in configs:
-            k1_accuracies = []
-            k10_accuracies = []
+        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
+        fig.suptitle('K=1 vs K=10 Meta-Learning Comparison', fontsize=16, fontweight='bold')
+        
+        plot_idx = 0
+        valid_comparisons = 0
+        
+        for complexity in sorted(complexity_groups.keys()):
+            if plot_idx >= 4:  # We only have 4 subplots
+                break
+                
+            data = complexity_groups[complexity]
+            k1_data = data['K1']
+            k10_data = data['K10']
             
-            for key, data in self.trajectory_data.items():
-                if config in key and data['performance'].get('final_accuracy'):
-                    if '_K1_' in key:
-                        k1_accuracies.append(data['performance']['final_accuracy'])
-                    elif '_K10_' in key:
-                        k10_accuracies.append(data['performance']['final_accuracy'])
+            ax = axes[plot_idx // 2, plot_idx % 2]
             
-            if k1_accuracies and k10_accuracies:
-                # Statistical test
-                t_stat, p_value = stats.ttest_ind(k10_accuracies, k1_accuracies)
-                effect_size = (np.mean(k10_accuracies) - np.mean(k1_accuracies)) / np.sqrt(
-                    (np.std(k10_accuracies)**2 + np.std(k1_accuracies)**2) / 2
-                )
+            if not k1_data and not k10_data:
+                ax.text(0.5, 0.5, f'No data for {complexity}', 
+                       ha='center', va='center', transform=ax.transAxes)
+                ax.set_title(f'{complexity} - No Data')
+                plot_idx += 1
+                continue
+            
+            # Plot available data
+            if k1_data:
+                k1_accs = [exp['final_accuracy'] for exp in k1_data]
+                ax.bar(['K=1'], [np.mean(k1_accs)], alpha=0.7, color='red', 
+                      yerr=[np.std(k1_accs)] if len(k1_accs) > 1 else 0,
+                      capsize=5, label=f'K=1 (n={len(k1_accs)})')
+            
+            if k10_data:
+                k10_accs = [exp['final_accuracy'] for exp in k10_data]
+                ax.bar(['K=10'], [np.mean(k10_accs)], alpha=0.7, color='blue',
+                      yerr=[np.std(k10_accs)] if len(k10_accs) > 1 else 0,
+                      capsize=5, label=f'K=10 (n={len(k10_accs)})')
+            
+            ax.set_ylabel('Final Accuracy')
+            ax.set_title(f'{complexity}')
+            ax.legend()
+            ax.set_ylim(0, 1)
+            
+            # Add statistical comparison if we have both K values
+            if k1_data and k10_data:
+                k1_accs = [exp['final_accuracy'] for exp in k1_data]
+                k10_accs = [exp['final_accuracy'] for exp in k10_data]
+                
+                # Perform statistical test
+                if len(k1_accs) > 1 and len(k10_accs) > 1:
+                    from scipy import stats
+                    t_stat, p_value = stats.ttest_ind(k10_accs, k1_accs)
+                    effect_size = (np.mean(k10_accs) - np.mean(k1_accs)) / np.sqrt((np.var(k10_accs) + np.var(k1_accs)) / 2)
+                else:
+                    t_stat, p_value = 0, 1
+                    effect_size = np.mean(k10_accs) - np.mean(k1_accs) if k10_accs and k1_accs else 0
                 
                 comparison_data.append({
-                    'config': config,
-                    'k1_mean': np.mean(k1_accuracies),
-                    'k1_std': np.std(k1_accuracies),
-                    'k1_n': len(k1_accuracies),
-                    'k10_mean': np.mean(k10_accuracies),
-                    'k10_std': np.std(k10_accuracies),
-                    'k10_n': len(k10_accuracies),
-                    'improvement': np.mean(k10_accuracies) - np.mean(k1_accuracies),
+                    'complexity': complexity,
+                    'k1_mean': np.mean(k1_accs) if k1_accs else 0,
+                    'k1_std': np.std(k1_accs) if len(k1_accs) > 1 else 0,
+                    'k1_n': len(k1_accs),
+                    'k10_mean': np.mean(k10_accs) if k10_accs else 0,
+                    'k10_std': np.std(k10_accs) if len(k10_accs) > 1 else 0,
+                    'k10_n': len(k10_accs),
+                    'improvement': (np.mean(k10_accs) - np.mean(k1_accs)) if k1_accs and k10_accs else 0,
                     'p_value': p_value,
                     'effect_size': effect_size
                 })
+                valid_comparisons += 1
+            
+            plot_idx += 1
         
-        # Generate comparison plot
-        self._plot_k_comparison(comparison_data)
-        
-        # Generate statistical summary
-        self._generate_statistical_summary(comparison_data)
-        
-        return comparison_data
-    
-    def _plot_k_comparison(self, comparison_data: List[Dict]):
-        """Plot K=1 vs K=10 comparison"""
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
-        
-        # Bar plot comparison
-        configs = [d['config'] for d in comparison_data]
-        k1_means = [d['k1_mean'] for d in comparison_data]
-        k10_means = [d['k10_mean'] for d in comparison_data]
-        k1_stds = [d['k1_std'] for d in comparison_data]
-        k10_stds = [d['k10_std'] for d in comparison_data]
-        
-        x = np.arange(len(configs))
-        width = 0.35
-        
-        bars1 = ax1.bar(x - width/2, k1_means, width, yerr=k1_stds, 
-                       label='K=1', alpha=0.8, color=FIGURE_CONFIG['color_palette'][0])
-        bars2 = ax1.bar(x + width/2, k10_means, width, yerr=k10_stds,
-                       label='K=10', alpha=0.8, color=FIGURE_CONFIG['color_palette'][1])
-        
-        ax1.set_ylabel('Final Accuracy')
-        ax1.set_title('K=1 vs K=10 Performance Comparison')
-        ax1.set_xticks(x)
-        ax1.set_xticklabels(configs)
-        ax1.legend()
-        ax1.grid(True, alpha=0.3)
-        
-        # Add significance indicators
-        for i, data in enumerate(comparison_data):
-            if data['p_value'] < 0.05:
-                height = max(data['k1_mean'] + data['k1_std'], data['k10_mean'] + data['k10_std'])
-                ax1.text(i, height + 0.02, '*', ha='center', va='bottom', fontsize=16)
-        
-        # Effect size plot
-        effect_sizes = [d['effect_size'] for d in comparison_data]
-        colors = [FIGURE_CONFIG['color_palette'][2] if es > 0 else FIGURE_CONFIG['color_palette'][3] 
-                 for es in effect_sizes]
-        
-        bars3 = ax2.bar(configs, effect_sizes, color=colors, alpha=0.8)
-        ax2.set_ylabel('Effect Size (Cohen\'s d)')
-        ax2.set_title('Effect Size: K=10 vs K=1')
-        ax2.axhline(y=0, color='black', linestyle='-', alpha=0.3)
-        ax2.grid(True, alpha=0.3)
-        
-        # Add effect size interpretation
-        ax2.axhline(y=0.2, color='gray', linestyle='--', alpha=0.5)
-        ax2.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5)
-        ax2.axhline(y=0.8, color='gray', linestyle='--', alpha=0.5)
-        ax2.text(0.5, 0.2, 'Small', transform=ax2.get_yaxis_transform(), alpha=0.7)
-        ax2.text(0.5, 0.5, 'Medium', transform=ax2.get_yaxis_transform(), alpha=0.7)
-        ax2.text(0.5, 0.8, 'Large', transform=ax2.get_yaxis_transform(), alpha=0.7)
+        # Hide unused subplots
+        for i in range(plot_idx, 4):
+            axes[i // 2, i % 2].set_visible(False)
         
         plt.tight_layout()
         plt.savefig(self.output_dir / 'k_comparison.pdf', dpi=300, bbox_inches='tight')
-        plt.savefig(self.output_dir / 'k_comparison.png', dpi=300, bbox_inches='tight')
+        plt.close()
+        
         print(f"Generated K comparison: {self.output_dir}/k_comparison.pdf")
+        
+        # Generate statistical summary if we have valid comparisons
+        if comparison_data:
+            self._generate_statistical_summary(comparison_data)
+        else:
+            print("⚠️  No valid K=1 vs K=10 comparisons found")
+            # Create a summary file noting the limitation
+            summary_path = self.output_dir / 'k_comparison_summary.txt'
+            with open(summary_path, 'w') as f:
+                f.write("K=1 vs K=10 Comparison Summary\n")
+                f.write("=" * 40 + "\n\n")
+                f.write("❌ No valid comparisons found\n\n")
+                f.write("Available experiments:\n")
+                for key in sorted(self.trajectory_data.keys()):
+                    exp = self.trajectory_data[key]
+                    final_acc = exp['performance']['final_accuracy']
+                    f.write(f"   {key}: final_acc = {final_acc:.4f}\n")
+                f.write(f"\nNote: Need both K=1 and K=10 experiments for the same complexity to make comparisons.\n")
+        
+        return comparison_data
     
     def _generate_statistical_summary(self, comparison_data: List[Dict]):
-        """Generate statistical summary table"""
+        """Generate statistical summary of K=1 vs K=10 comparison"""
+        if not comparison_data:
+            print("⚠️  No comparison data available for statistical summary")
+            return
+        
+        # Create summary DataFrame
         summary_df = pd.DataFrame(comparison_data)
         
-        # Format for publication
+        # Add formatted columns for reporting
         summary_df['k1_formatted'] = summary_df.apply(
             lambda row: f"{row['k1_mean']:.3f} ± {row['k1_std']:.3f} (n={row['k1_n']})", axis=1
         )
         summary_df['k10_formatted'] = summary_df.apply(
             lambda row: f"{row['k10_mean']:.3f} ± {row['k10_std']:.3f} (n={row['k10_n']})", axis=1
         )
+        summary_df['improvement_formatted'] = summary_df.apply(
+            lambda row: f"{row['improvement']:+.3f}", axis=1
+        )
         summary_df['significance'] = summary_df['p_value'].apply(
             lambda p: '***' if p < 0.001 else '**' if p < 0.01 else '*' if p < 0.05 else 'ns'
         )
+        summary_df['effect_size_interpretation'] = summary_df['effect_size'].apply(
+            lambda es: 'Large' if abs(es) >= 0.8 else 'Medium' if abs(es) >= 0.5 else 'Small' if abs(es) >= 0.2 else 'Negligible'
+        )
         
-        # Select columns for final table
-        final_columns = ['config', 'k1_formatted', 'k10_formatted', 'improvement', 
-                        'effect_size', 'p_value', 'significance']
-        final_df = summary_df[final_columns]
+        # Save detailed summary
+        summary_path = self.output_dir / 'k_comparison_summary.csv'
+        summary_df.to_csv(summary_path, index=False)
         
-        # Save to CSV
-        final_df.to_csv(self.output_dir / 'statistical_summary.csv', index=False)
-        
-        # Generate formatted table
-        with open(self.output_dir / 'statistical_summary.txt', 'w') as f:
-            f.write("Camera-Ready Statistical Summary\n")
+        # Generate text report
+        report_path = self.output_dir / 'k_comparison_report.txt'
+        with open(report_path, 'w') as f:
+            f.write("K=1 vs K=10 Meta-Learning Comparison Report\n")
             f.write("=" * 50 + "\n\n")
-            f.write(final_df.to_string(index=False))
-            f.write("\n\n")
-            f.write("Significance: *** p<0.001, ** p<0.01, * p<0.05, ns not significant\n")
+            
+            if len(comparison_data) == 0:
+                f.write("❌ No valid comparisons available\n")
+                return
+            
+            f.write(f"Total comparisons: {len(comparison_data)}\n\n")
+            
+            for _, row in summary_df.iterrows():
+                f.write(f"Configuration: {row['complexity']}\n")
+                f.write(f"  K=1:  {row['k1_formatted']}\n")
+                f.write(f"  K=10: {row['k10_formatted']}\n")
+                f.write(f"  Improvement: {row['improvement_formatted']} ({row['improvement_formatted']})\n")
+                f.write(f"  Statistical significance: {row['significance']} (p={row['p_value']:.4f})\n")
+                f.write(f"  Effect size: {row['effect_size']:.3f} ({row['effect_size_interpretation']})\n")
+                f.write("\n")
+            
+            # Overall summary
+            significant_improvements = (summary_df['p_value'] < 0.05) & (summary_df['improvement'] > 0)
+            f.write("SUMMARY:\n")
+            f.write(f"- {significant_improvements.sum()}/{len(summary_df)} configurations show significant improvement with K=10\n")
+            
+            if len(summary_df) > 0:
+                avg_improvement = summary_df['improvement'].mean()
+                f.write(f"- Average improvement: {avg_improvement:+.3f}\n")
+                
+                large_effects = summary_df['effect_size'].abs() >= 0.8
+                f.write(f"- {large_effects.sum()}/{len(summary_df)} configurations show large effect sizes\n")
         
-        print(f"Generated statistical summary: {self.output_dir}/statistical_summary.csv")
+        print(f"Generated statistical summary: {self.output_dir}/k_comparison_report.txt")
+        print(f"Generated detailed data: {self.output_dir}/k_comparison_summary.csv")
     
     def generate_camera_ready_report(self):
         """Generate comprehensive camera-ready report"""
-        report_path = self.output_dir / 'camera_ready_report.md'
+        print("5. Generating comprehensive report...")
         
+        # Collect summary statistics
+        total_experiments = len(self.trajectory_data)
+        completed_experiments = sum(1 for data in self.trajectory_data.values() 
+                                  if data.get('experiment_info', {}).get('status') == 'completed')
+        
+        avg_final_accuracy = np.mean([data['performance']['final_accuracy'] 
+                                    for data in self.trajectory_data.values()])
+        
+        report_path = self.output_dir / 'camera_ready_comprehensive_report.md'
         with open(report_path, 'w') as f:
             f.write("# Camera-Ready Analysis Report\n\n")
-            f.write(f"Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             
             f.write("## Executive Summary\n\n")
-            f.write("This report presents the final camera-ready analysis of ManyPaths experiments ")
-            f.write("with clean visualizations and robust statistical analysis.\n\n")
+            f.write(f"- **Total Experiments:** {total_experiments}\n")
+            f.write(f"- **Completed:** {completed_experiments}/{total_experiments}\n")
+            f.write(f"- **Average Final Accuracy:** {avg_final_accuracy:.3f}\n\n")
             
-            f.write("## Data Overview\n\n")
-            f.write(f"- **Total Experiments**: {len(self.trajectory_data)}\n")
-            f.write(f"- **Configurations**: {len(set(d['config']['features'] for d in self.trajectory_data.values()))}\n")
-            f.write(f"- **Seeds per Configuration**: Multiple\n\n")
+            f.write("## Available Analyses\n\n")
+            f.write("1. **Clean Trajectory Plots:** `clean_trajectories.pdf`\n")
+            f.write("2. **K=1 vs K=10 Comparison:** `k_comparison.pdf`\n")
+            f.write("3. **Statistical Summary:** `k_comparison_report.txt`\n")
+            f.write("4. **Sample Efficiency Analysis:** `sample_efficiency.pdf`\n\n")
             
-            f.write("## Key Findings\n\n")
-            f.write("### 1. More Gradient Steps → Better Generalization\n")
-            f.write("K=10 adaptation consistently outperforms K=1 across all complexity levels.\n\n")
+            f.write("## Experiment Details\n\n")
+            for key, data in sorted(self.trajectory_data.items()):
+                config = data['config']
+                final_acc = data['performance']['final_accuracy']
+                status = data.get('experiment_info', {}).get('status', 'unknown')
+                f.write(f"- **{key}:** {final_acc:.3f} accuracy, {status}\n")
             
-            f.write("### 2. Effect Scales with Complexity\n")
-            f.write("More complex concepts (higher feature dimensions) show larger improvements.\n\n")
-            
-            f.write("### 3. Statistical Robustness\n")
-            f.write("All results include proper statistical testing and effect size calculations.\n\n")
-            
-            f.write("## Figures Generated\n\n")
-            f.write("1. **Clean Trajectory Plots**: `clean_trajectories.pdf`\n")
-            f.write("2. **K=1 vs K=10 Comparison**: `k_comparison.pdf`\n")
-            f.write("3. **Statistical Summary**: `statistical_summary.csv`\n\n")
-            
-            f.write("---\n\n")
-            f.write("*This analysis replaces previous messy visualizations with clean, ")
-            f.write("publication-ready results.*\n")
+            f.write("\n## Next Steps\n\n")
+            f.write("1. Review trajectory plots for training dynamics\n")
+            f.write("2. Analyze K=1 vs K=10 statistical comparisons\n")
+            f.write("3. Examine sample efficiency trends\n")
+            f.write("4. Prepare publication figures\n")
         
-        print(f"Generated camera-ready report: {report_path}")
+        print(f"Generated comprehensive report: {self.output_dir}/camera_ready_comprehensive_report.md")
     
     def run_full_analysis(self):
         """Run complete camera-ready analysis pipeline"""
