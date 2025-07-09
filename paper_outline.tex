@@ -1,0 +1,183 @@
+\documentclass[11pt, a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs} % For professional looking tables
+\usepackage{caption}
+\usepackage{subcaption} % For subfigures
+\usepackage{hyperref} % For clickable links and references
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,      
+    urlcolor=cyan,
+    pdftitle={Investigating Higher-Dimensional Feature Learning},
+}
+\usepackage{float} % For [H] option to place figures exactly
+\usepackage{parskip} % Adds a bit of space between paragraphs
+
+\title{Investigating Higher-Dimensional Feature and Concept Learning with Meta-Learning}
+\author{Your Name/Group Here \\ Princeton University} % Replace with your details
+\date{\today}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+% TODO: Write abstract later
+Placeholder for the abstract. This paper investigates the ability of meta-learning algorithms, specifically Meta-SGD and second-order variants, to learn concepts of varying complexity defined by higher-dimensional feature spaces, comparing their performance and learning dynamics against traditional SGD baselines.
+\end{abstract}
+
+\section{Introduction}
+% TODO: Write introduction
+Placeholder for the introduction.
+Discuss the importance of learning from few examples, concept learning, and the challenges in higher-dimensional spaces.
+Introduce meta-learning and Meta-SGD as potential solutions.
+State the research questions and contributions of this paper.
+
+\section{Experimental Setup}
+\label{sec:experimental_setup}
+
+Our experiments are designed to evaluate the capacity of meta-learning approaches to acquire synthetic concepts of varying complexity and to compare their performance against standard supervised learning baselines. We focus on how different model and meta-learning parameters affect learning efficiency and generalization.
+
+\subsection{Concept Generation}
+Concepts are defined as binary classification tasks. Input samples consist of $N_f$-dimensional binary feature vectors (bits). The true concept underlying each task is generated using a Probabilistic Context-Free Grammar (PCFG). The complexity of the generated concepts is primarily controlled by two parameters:
+\begin{itemize}
+    \item \textbf{Number of Features ($N_f$):} We explored feature dimensionalities of $N_f \in \{8, 16, 32\}$.
+    \item \textbf{PCFG Max Depth ($D_p$):} The maximum depth of the derivation tree in the PCFG, controlling the complexity of the boolean function defining the concept. We used depths $D_p \in \{3, 5, 7\}$.
+\end{itemize}
+For each task, a unique concept is sampled, and then data points (feature vectors and their corresponding binary labels) are generated based on this concept.
+
+\subsection{Model Architecture}
+A Multi-Layer Perceptron (MLP) is used as the base learner for all experiments. The specific architecture (number of hidden layers and units per layer) is kept consistent across compared conditions for a fair comparison, though details may vary across different experimental sweeps if specified. (Note: Details of MLP architecture such as activation functions, and specific layer sizes should be added here if they are fixed across the board, or mention how they are determined).
+
+\subsection{Meta-Learning Approach}
+We employ a meta-learning strategy based on an MAML-variant framework, allowing for both first-order (Meta-SGD) and second-order gradient approximations for the meta-update.
+\begin{itemize}
+    \item \textbf{Meta-Training:} The meta-learner is trained over a distribution of tasks. In each meta-iteration, a batch of $T_{meta}=4$ tasks is sampled.
+    \item \textbf{Inner Loop (Adaptation):} For each task in the meta-batch, the model adapts its parameters from the current meta-initialized state using $K=1$ gradient descent step on the task's support set. The learning rate for this adaptation is $\alpha = 0.01$.
+    \item \textbf{Outer Loop (Meta-Update):} The meta-objective is the average loss on the query sets of the tasks in the meta-batch, computed using the adapted parameters. The meta-parameters are updated to minimize this objective using the Adam optimizer with a learning rate of $\beta = 0.001$.
+    \item \textbf{Gradient Order:} We investigate both first-order (approximating the meta-gradient by ignoring second-order terms, often referred to as Meta-SGD or FO-MAML) and second-order meta-updates. This is controlled by a flag in our experiments, corresponding to `ORDERS_LIST=(0, 1)` in the sweep configuration, where 1 indicates first-order.
+\end{itemize}
+The meta-training process runs for a total of $E=10,000$ epochs (meta-iterations).
+
+\subsection{SGD Baseline}
+As a baseline, we train separate MLP models for each task from scratch using standard Stochastic Gradient Descent (SGD) with the Adam optimizer. The learning rate and number of training steps for the SGD baseline are optimized for strong performance on individual tasks. (Note: Specify the number of SGD steps per task and the learning rate if these are fixed, e.g., from `sgd_config` in your Python scripts, or how they are chosen).
+
+\subsection{Parameter Sweep and Configurations}
+The core experimental sweep varies:
+\begin{itemize}
+    \item Number of Concept Features ($N_f$): ${8, 16, 32}$
+    \item PCFG Max Depth ($D_p$): ${3, 5, 7}$
+    \item Meta-Learning Order: First-Order (Meta-SGD) vs. Second-Order
+\end{itemize}
+This results in $3 \times 3 \times 2 = 18$ primary configurations.
+Other key parameters are fixed as per our SLURM script (`run_concept_complexity_sweep.slurm`):
+\begin{itemize}
+    \item Seed: Primarily seed 0 for initial runs, with plans for multiple seeds for robustness.
+    \item Adaptation Steps ($K$): 1
+    \item Tasks per Meta-Batch ($T_{meta}$): 4
+    \item Outer (Meta) Learning Rate ($\beta$): $10^{-3}$
+    \item Inner (Adaptation) Learning Rate ($\alpha$): $10^{-2}$
+    \item Epochs ($E$): $10,000$
+    \item No hyperparameter search is active during these sweeps (`--no_hyper_search`), with `hyper-index 14` used, implying a pre-selected general hyperparameter configuration for the MLP and optimizer.
+    \item Patience for early stopping was set to $100,000$, effectively disabling it for the duration of $10,000$ epochs.
+\end{itemize}
+
+\subsection{Evaluation Metrics}
+We evaluate the learning process and final performance using several metrics:
+\begin{itemize}
+    \item \textbf{Meta-Validation Loss/Accuracy:} For meta-learning models, performance is tracked on a set of held-out validation tasks throughout the meta-training process.
+    \item \textbf{Query Loss/Accuracy (SGD):} For the SGD baseline, performance is measured as the loss and accuracy on the query set of each task after training.
+    \item \textbf{Gradient Alignment (Meta-SGD):} Cosine similarity between the meta-gradient and the average task gradient within a meta-batch, providing insight into the meta-learning process.
+    \item \textbf{Weight Drift:} L2 distance of model parameters from their initialization and from previous checkpoints, measured for both meta-learning models (over meta-epochs) and SGD models (final drift after task-specific training).
+\end{itemize}
+
+\subsection{Computational Resources}
+Experiments are conducted on a high-performance computing cluster, utilizing NVIDIA GPUs for accelerating model training. Each job corresponding to a specific configuration is run on a single GPU.
+
+\section{Results}
+\label{sec:results}
+% TODO: Populate with actual results and discussion of figures
+
+In this section, we present the outcomes of our experiments, focusing on learning curves, final performance distributions, and diagnostic metrics like gradient alignment and weight drift.
+
+\subsection{Meta-SGD Learning Dynamics}
+Figure \ref{fig:metasgd_learning_curves_simple} and \ref{fig:metasgd_learning_curves_complex} show the typical learning trajectories for Meta-SGD on concepts of varying complexity.
+
+\begin{figure}[H]
+    \centering
+    % Ensure you have a 'figures' subdirectory or adjust path
+    \includegraphics[width=0.8\textwidth]{figures/maml_learning_curves_Concept_Simple.png} 
+    \caption{Meta-SGD learning dynamics (validation loss, validation accuracy, gradient alignment) for a representative 'simple' concept configuration (e.g., $N_f=8, D_p=3$). Filename will be adjusted.}
+    \label{fig:metasgd_learning_curves_simple}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figures/maml_learning_curves_Concept_Complex.png}
+    \caption{Meta-SGD learning dynamics for a representative 'complex' concept configuration (e.g., $N_f=32, D_p=7$). Filename will be adjusted.}
+    \label{fig:metasgd_learning_curves_complex}
+\end{figure}
+
+\subsection{SGD Baseline Performance}
+The performance of the SGD baseline across a distribution of tasks is shown in Figure \ref{fig:sgd_performance_simple} and \ref{fig:sgd_performance_complex}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/sgd_performance_distribution_Concept_Simple.png}
+    \caption{Distribution of final query accuracy and loss for the SGD baseline on 'simple' concepts. Filename will be adjusted.}
+    \label{fig:sgd_performance_simple}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figures/sgd_performance_distribution_Concept_Complex.png}
+    \caption{Distribution of final query accuracy and loss for the SGD baseline on 'complex' concepts. Filename will be adjusted.}
+    \label{fig:sgd_performance_complex}
+\end{figure}
+
+\subsection{Gradient Alignment Analysis (Meta-SGD)}
+A focused view on gradient alignment during Meta-SGD training is provided in Figure \ref{fig:metasgd_grad_alignment}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{figures/maml_gradient_alignment_Concept_Simple.png} % Example, might need separate for complex or combined
+    \caption{Meta-SGD gradient alignment over training epochs for a representative configuration. Filename will be adjusted.}
+    \label{fig:metasgd_grad_alignment}
+\end{figure}
+
+\subsection{Weight Drift Comparison}
+Figure \ref{fig:weight_drift_comparison} compares the weight drift dynamics of Meta-SGD over its training period against the distribution of final weight drifts observed in SGD models.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{figures/weight_drift_comparison_Concept_Simple.png} % Example
+    \caption{Comparison of weight drift: Meta-SGD parameter drift over meta-epochs vs. distribution of final SGD model drifts from their initializations. Filename will be adjusted.}
+    \label{fig:weight_drift_comparison}
+\end{figure}
+
+% TODO: Add placeholders for comparative plots:
+% - Final performance (Meta-SGD vs SGD) vs. Concept Complexity (N_f, D_p) as bar charts or line plots.
+% - Possibly ablation studies if any are planned.
+
+\section{Discussion}
+% TODO: Interpret results
+Placeholder for discussion.
+Analyze the trends observed in the figures.
+Compare Meta-SGD and SGD performance.
+Discuss the implications of gradient alignment and weight drift.
+Relate findings back to concept complexity.
+
+\section{Conclusion}
+% TODO: Summarize findings and future work
+Placeholder for conclusion.
+Summarize the main findings.
+Discuss limitations and potential avenues for future research.
+
+\bibliographystyle{plain} % Or any other style
+% \bibliography{references} % If you have a .bib file
+
+\end{document} 

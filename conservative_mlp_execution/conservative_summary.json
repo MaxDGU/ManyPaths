@@ -1,0 +1,21 @@
+{
+  "timing_model": "Sublinear scaling (complexity^0.7) with 40% safety buffer",
+  "base_times": "F8_D3: K=1 ~12h, K=10 ~18h for 200 epochs",
+  "priorities": {
+    "P1_CORE": {
+      "experiments": 12,
+      "estimated_hours": 537.2,
+      "slurm_allocation": 48
+    },
+    "P2_DEPTH": {
+      "experiments": 18,
+      "estimated_hours": 711.2,
+      "slurm_allocation": 48
+    },
+    "P3_MAX": {
+      "experiments": 18,
+      "estimated_hours": 900.1,
+      "slurm_allocation": 48
+    }
+  }
+}

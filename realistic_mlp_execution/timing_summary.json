@@ -1,0 +1,39 @@
+{
+  "calibration_basis": "F8_D3 observed: K=1 ~15h, K=10 ~24h for 200 epochs",
+  "scaling_method": "Linear with features\u00d7depth complexity",
+  "safety_buffer": "30-50% depending on complexity",
+  "priorities": {
+    "P1_CORE": {
+      "experiments": 12,
+      "realistic_hours": 1053.0,
+      "slurm_allocation": 48,
+      "configurations": [
+        "F16_D3",
+        "F32_D3"
+      ],
+      "urgency": "CAMERA-READY CRITICAL"
+    },
+    "P2_DEPTH": {
+      "experiments": 18,
+      "realistic_hours": 1535.6,
+      "slurm_allocation": 48,
+      "configurations": [
+        "F8_D5",
+        "F16_D5",
+        "F32_D5"
+      ],
+      "urgency": "ANALYSIS ENHANCEMENT"
+    },
+    "P3_MAX": {
+      "experiments": 18,
+      "realistic_hours": 2149.9,
+      "slurm_allocation": 48,
+      "configurations": [
+        "F8_D7",
+        "F32_D7",
+        "F16_D7"
+      ],
+      "urgency": "ANALYSIS ENHANCEMENT"
+    }
+  }
+}

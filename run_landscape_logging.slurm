@@ -151,7 +151,8 @@ python main.py \
     --num-concept-features ${CURRENT_FEATURES} --pcfg-max-depth ${CURRENT_DEPTH} \
     --adaptation-steps ${ADAPTATION_STEPS} --epochs ${EPOCHS} \
     --seed ${CURRENT_SEED} \
-    --log-landscape --checkpoint-every ${CHECKPOINT_EVERY} \
+    --no_hyper_search --hyper-index 14 \
+    --log_landscape --checkpoint_every ${CHECKPOINT_EVERY} \
     --save --verbose-debug
 
 META_SGD_EXIT_CODE=$?
@@ -172,7 +173,8 @@ python main_baseline_sgd.py \
     --cache ${CACHE_PATH} \
     --epochs ${EPOCHS} --lr 0.01 --momentum 0.9 \
     --seed ${CURRENT_SEED} \
-    --log-landscape --checkpoint-every ${CHECKPOINT_EVERY} --save-checkpoints
+    --no_hyper_search --hyper-index 14 \
+    --log_landscape --checkpoint_every ${CHECKPOINT_EVERY} --save-checkpoints
 
 SGD_EXIT_CODE=$?
 echo "SLURM SCRIPT: SGD baseline finished with exit code ${SGD_EXIT_CODE}"

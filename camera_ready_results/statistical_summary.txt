@@ -1,0 +1,11 @@
+Camera-Ready Statistical Summary
+==================================================
+
+Configuration  K=1 Accuracy K=10 Accuracy Improvement p-value Effect Size  N (K=1)  N (K=10)
+         F8D3 0.720 ± 0.045 0.766 ± 0.021       0.045   0.454        0.92        2         2
+        F32D3 0.513 ± 0.000 0.556 ± 0.000       0.043     N/A         N/A        1         1
+
+Interpretation:
+--------------------
+F8D3: 0.045 improvement (not significant)
+F32D3: 0.043 improvement (not significant)

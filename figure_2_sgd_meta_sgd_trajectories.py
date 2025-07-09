@@ -14,483 +14,303 @@ import os
 import glob
 from pathlib import Path
 import argparse
+import re
 
 # Set publication style
 plt.style.use('seaborn-v0_8-whitegrid')
 sns.set_palette("husl")
 
-class Figure2Generator:
-    def __init__(self, sgd_results_dir="results/baseline_sgd/baseline_run1", 
-                 meta_sgd_results_dir="results", output_dir="figures"):
-        self.sgd_results_dir = sgd_results_dir
-        self.meta_sgd_results_dir = meta_sgd_results_dir
-        self.output_dir = output_dir
-        os.makedirs(output_dir, exist_ok=True)
+def load_complete_meta_sgd_trajectories():
+    """Load complete Meta-SGD trajectories from concept_multiseed directory"""
+    
+    trajectories = {
+        'F8D3': [],
+        'F8D5': [],
+        'F32D3': []
+    }
+    
+    # Priority order: concept_multiseed (complete), then run1, then others
+    search_dirs = [
+        'results/concept_multiseed/',
+        'results/run1/',
+        'results/',
+    ]
+    
+    for search_dir in search_dirs:
+        if not os.path.exists(search_dir):
+            continue
+            
+        print(f"Searching in {search_dir}...")
         
-        self.sgd_trajectories = {}
-        self.meta_sgd_trajectories = {}
+        # Find trajectory files
+        pattern = os.path.join(search_dir, '*trajectory*.csv')
+        trajectory_files = glob.glob(pattern)
         
-    def load_sgd_trajectories(self):
-        """Load SGD baseline trajectory data."""
-        print("Loading SGD baseline trajectories...")
-        
-        # Pattern to match SGD baseline files
-        pattern = os.path.join(self.sgd_results_dir, "*baselinetrajectory.csv")
-        files = glob.glob(pattern)
-        
-        for file_path in files:
-            try:
-                filename = os.path.basename(file_path)
-                params = self._parse_sgd_filename(filename)
-                
-                if params:
-                    df = pd.read_csv(file_path)
-                    
-                    # Group by complexity
-                    complexity = self._get_complexity_label(params['features'], params['depth'])
-                    
-                    if complexity not in self.sgd_trajectories:
-                        self.sgd_trajectories[complexity] = {}
-                    
-                    self.sgd_trajectories[complexity][params['seed']] = df
-                    
-            except Exception as e:
-                print(f"Error loading SGD file {file_path}: {e}")
-                
-        print(f"Loaded SGD trajectories for {len(self.sgd_trajectories)} complexities")
-        
-    def load_meta_sgd_trajectories(self):
-        """Load Meta-SGD trajectory data."""
-        print("Loading Meta-SGD trajectories...")
-        
-        # Pattern to match Meta-SGD trajectory files
-        pattern = os.path.join(self.meta_sgd_results_dir, "**/*trajectory.csv")
-        files = glob.glob(pattern, recursive=True)
-        
-        # Dictionary to store the latest epoch for each configuration
-        latest_files = {}
-        
-        for file_path in files:
+        for file_path in trajectory_files:
+            filename = os.path.basename(file_path)
+            
             # Skip baseline files
-            if 'baseline' in file_path:
+            if 'baseline' in filename.lower():
+                continue
+            
+            # Extract configuration
+            if 'feats8_depth3' in filename:
+                key = 'F8D3'
+            elif 'feats8_depth5' in filename:
+                key = 'F8D5'
+            elif 'feats32_depth3' in filename:
+                key = 'F32D3'
+            else:
                 continue
                 
-            try:
-                filename = os.path.basename(file_path)
-                params = self._parse_meta_sgd_filename(filename)
-                
-                if params:
-                    # Create a unique key for this configuration
-                    config_key = (params['features'], params['depth'], 
-                                params['order'], params['seed'])
-                    
-                    # Keep track of the latest epoch for each configuration
-                    epoch = params.get('epoch', 0)
-                    if config_key not in latest_files or epoch > latest_files[config_key][1]:
-                        latest_files[config_key] = (file_path, epoch)
-                        
-            except Exception as e:
-                print(f"Error parsing Meta-SGD filename {filename}: {e}")
-        
-        # Load the latest trajectory file for each configuration
-        for config_key, (file_path, epoch) in latest_files.items():
+            # For concept_multiseed, prioritize the highest epoch numbers
+            if 'concept_multiseed' in search_dir:
+                # Extract epoch number
+                epoch_match = re.search(r'epoch_(\d+)', filename)
+                if epoch_match:
+                    epoch_num = int(epoch_match.group(1))
+                    # Only use high epoch numbers (complete trajectories)
+                    if epoch_num < 60:
+                        continue
+            
             try:
                 df = pd.read_csv(file_path)
-                features, depth, order, seed = config_key
-                
-                complexity = self._get_complexity_label(features, depth)
-                
-                if complexity not in self.meta_sgd_trajectories:
-                    self.meta_sgd_trajectories[complexity] = {}
-                
-                self.meta_sgd_trajectories[complexity][seed] = df
-                    
+                if len(df) > 50:  # Only use trajectories with substantial data
+                    trajectories[key].append({
+                        'file': file_path,
+                        'data': df,
+                        'length': len(df)
+                    })
+                    print(f"  Loaded {key}: {filename} ({len(df)} steps)")
             except Exception as e:
-                print(f"Error loading Meta-SGD file {file_path}: {e}")
-                
-        print(f"Loaded Meta-SGD trajectories for {len(self.meta_sgd_trajectories)} complexities")
-        
-    def _parse_sgd_filename(self, filename):
-        """Parse parameters from SGD baseline filename."""
-        import re
-        
-        # Pattern: concept_mlp_14_bits_feats8_depth3_sgdsteps32_lr0.01_runbaseline_run1_seed1_baselinetrajectory.csv
-        pattern = r"concept_mlp_\d+_bits_feats(\d+)_depth(\d+)_sgdsteps\d+_lr[\d.]+_runbaseline_run1_seed(\d+)_baselinetrajectory\.csv"
-        match = re.match(pattern, filename)
-        
-        if match:
-            return {
-                'features': int(match.group(1)),
-                'depth': int(match.group(2)),
-                'seed': int(match.group(3))
-            }
-        
-        return None
-        
-    def _parse_meta_sgd_filename(self, filename):
-        """Parse parameters from Meta-SGD trajectory filename."""
-        import re
-        
-        # Pattern for files with epoch suffix
-        pattern_epoch = r"concept_mlp_\d+_bits_feats(\d+)_depth(\d+)_adapt(\d+)_(\w+)Ord_seed(\d+)_epoch_(\d+)_trajectory\.csv"
-        match = re.match(pattern_epoch, filename)
-        
-        if match:
-            return {
-                'features': int(match.group(1)),
-                'depth': int(match.group(2)),
-                'adaptation_steps': int(match.group(3)),
-                'order': match.group(4),
-                'seed': int(match.group(5)),
-                'epoch': int(match.group(6))
-            }
-        
-        # Pattern for files without epoch suffix
-        pattern_no_epoch = r"concept_mlp_\d+_bits_feats(\d+)_depth(\d+)_adapt(\d+)_(\w+)Ord_seed(\d+)_trajectory\.csv"
-        match = re.match(pattern_no_epoch, filename)
-        
-        if match:
-            return {
-                'features': int(match.group(1)),
-                'depth': int(match.group(2)),
-                'adaptation_steps': int(match.group(3)),
-                'order': match.group(4),
-                'seed': int(match.group(5)),
-                'epoch': 0
-            }
-        
-        return None
-        
-    def _get_complexity_label(self, features, depth):
-        """Get complexity label based on features and depth."""
-        if features == 8 and depth == 3:
-            return "Simple (F8D3)"
-        elif features == 8 and depth == 5:
-            return "Medium (F8D5)"
-        elif features == 16 and depth == 3:
-            return "Medium (F16D3)"
-        elif features == 32 and depth == 3:
-            return "Complex (F32D3)"
+                print(f"  Error loading {filename}: {e}")
+    
+    # Select best trajectories for each complexity
+    final_trajectories = {}
+    for key, trajs in trajectories.items():
+        if trajs:
+            # Sort by length (descending) and take the longest ones
+            trajs.sort(key=lambda x: x['length'], reverse=True)
+            # Take up to 3 longest trajectories
+            final_trajectories[key] = trajs[:3]
+            print(f"Selected {len(final_trajectories[key])} trajectories for {key}")
         else:
-            return f"F{features}D{depth}"
-            
-    def prepare_sgd_trajectory_data(self, complexity, max_tasks=10000):
-        """Prepare SGD trajectory data with running averages and confidence intervals."""
-        if complexity not in self.sgd_trajectories:
-            return None, None, None
-            
-        seeds_data = self.sgd_trajectories[complexity]
-        
-        # Find the minimum length across all seeds
-        min_length = min(len(df) for df in seeds_data.values())
-        min_length = min(min_length, max_tasks)
-        
-        # Create arrays for all seeds
-        accuracies = []
-        for seed, df in seeds_data.items():
-            if len(df) >= min_length:
-                acc = df['query_accuracy'].iloc[:min_length].values
-                accuracies.append(acc)
-        
-        if not accuracies:
-            return None, None, None
-            
-        accuracies = np.array(accuracies)
-        
-        # Compute running averages
-        running_means = []
-        running_stds = []
-        
-        window_size = min(100, min_length // 20)  # Adaptive window size
-        
-        for i in range(min_length):
-            start_idx = max(0, i - window_size + 1)
-            end_idx = i + 1
-            
-            # Running average across seeds and time
-            window_means = []
-            for seed_idx in range(len(accuracies)):
-                window_mean = np.mean(accuracies[seed_idx, start_idx:end_idx])
-                window_means.append(window_mean)
-            
-            running_means.append(np.mean(window_means))
-            running_stds.append(np.std(window_means))
-        
-        task_indices = np.arange(min_length)
-        
-        return task_indices, np.array(running_means), np.array(running_stds)
-        
-    def prepare_meta_sgd_trajectory_data(self, complexity):
-        """Prepare Meta-SGD trajectory data."""
-        if complexity not in self.meta_sgd_trajectories:
-            return None, None, None
-            
-        seeds_data = self.meta_sgd_trajectories[complexity]
-        
-        # Find the minimum length across all seeds
-        min_length = min(len(df) for df in seeds_data.values())
-        
-        # Create arrays for all seeds
-        accuracies = []
-        steps = []
-        
-        for seed, df in seeds_data.items():
-            if len(df) >= min_length:
-                acc = df['val_accuracy'].iloc[:min_length].values
-                step = df['log_step'].iloc[:min_length].values
-                accuracies.append(acc)
-                steps.append(step)
-        
-        if not accuracies:
-            return None, None, None
-            
-        # Use the first seed's steps (assuming they're the same)
-        steps = steps[0]
-        accuracies = np.array(accuracies)
-        
-        # Compute mean and std across seeds
-        mean_acc = np.mean(accuracies, axis=0)
-        std_acc = np.std(accuracies, axis=0)
-        
-        return steps, mean_acc, std_acc
-        
-    def plot_figure_2(self):
-        """Generate Figure 2 with Meta-SGD trajectories and SGD trajectories with error bars."""
-        print("Generating Figure 2...")
-        
-        # Define complexities to plot
-        complexities = ["Simple (F8D3)", "Medium (F8D5)", "Complex (F32D3)"]
-        
-        # Create subplots
-        fig, axes = plt.subplots(1, 3, figsize=(18, 6))
-        fig.suptitle('Learning Trajectories: Meta-SGD vs SGD Baseline', fontsize=16, fontweight='bold')
-        
-        colors = {
-            'Meta-SGD': '#2E8B57',  # Sea green
-            'SGD': '#C7322F'        # Red
-        }
-        
-        for i, complexity in enumerate(complexities):
-            ax = axes[i]
-            
-            # Plot Meta-SGD trajectories
-            meta_steps, meta_mean, meta_std = self.prepare_meta_sgd_trajectory_data(complexity)
-            if meta_steps is not None:
-                ax.plot(meta_steps, meta_mean, color=colors['Meta-SGD'], 
-                       linewidth=2, label='Meta-SGD', alpha=0.9)
-                ax.fill_between(meta_steps, meta_mean - meta_std, meta_mean + meta_std, 
-                               color=colors['Meta-SGD'], alpha=0.3)
-            
-            # Plot SGD trajectories
-            sgd_tasks, sgd_mean, sgd_std = self.prepare_sgd_trajectory_data(complexity)
-            if sgd_tasks is not None:
-                ax.plot(sgd_tasks, sgd_mean, color=colors['SGD'], 
-                       linewidth=2, label='SGD Baseline', alpha=0.9)
-                ax.fill_between(sgd_tasks, sgd_mean - sgd_std, sgd_mean + sgd_std, 
-                               color=colors['SGD'], alpha=0.3)
-            
-            # Formatting
-            ax.set_title(f'{complexity}', fontsize=14, fontweight='bold')
-            ax.set_xlabel('Training Progress', fontsize=12)
-            if i == 0:
-                ax.set_ylabel('Accuracy', fontsize=12)
-            ax.set_ylim(0.4, 1.0)
-            ax.grid(True, alpha=0.3)
-            ax.legend()
-            
-            # Add performance annotations
-            if sgd_mean is not None and meta_mean is not None:
-                final_sgd = sgd_mean[-1]
-                final_meta = meta_mean[-1]
-                improvement = final_meta - final_sgd
-                
-                # Add text box with performance summary
-                textstr = f'SGD: {final_sgd:.3f}\nMeta-SGD: {final_meta:.3f}\nΔ: {improvement:+.3f}'
-                props = dict(boxstyle='round', facecolor='white', alpha=0.8)
-                ax.text(0.02, 0.98, textstr, transform=ax.transAxes, fontsize=10,
-                       verticalalignment='top', bbox=props)
-        
-        plt.tight_layout()
-        
-        # Save figure
-        plt.savefig(os.path.join(self.output_dir, 'figure_2_meta_sgd_vs_sgd_trajectories.svg'), 
-                   dpi=300, bbox_inches='tight')
-        plt.savefig(os.path.join(self.output_dir, 'figure_2_meta_sgd_vs_sgd_trajectories.png'), 
-                   dpi=300, bbox_inches='tight')
-        plt.show()
-        
-        print(f"Figure 2 saved to {self.output_dir}/figure_2_meta_sgd_vs_sgd_trajectories.svg")
-        
-    def plot_detailed_trajectory_comparison(self):
-        """Generate a more detailed trajectory comparison."""
-        print("Generating detailed trajectory comparison...")
-        
-        # Define complexities to plot
-        complexities = ["Simple (F8D3)", "Medium (F8D5)", "Complex (F32D3)"]
-        
-        # Create subplots
-        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-        fig.suptitle('Detailed Learning Trajectories: Meta-SGD vs SGD Baseline', fontsize=16, fontweight='bold')
-        
-        colors = {
-            'Meta-SGD': '#2E8B57',  # Sea green
-            'SGD': '#C7322F'        # Red
-        }
-        
-        for i, complexity in enumerate(complexities):
-            # Top row: Accuracy trajectories
-            ax_acc = axes[0, i]
-            
-            # Plot Meta-SGD trajectories
-            meta_steps, meta_mean, meta_std = self.prepare_meta_sgd_trajectory_data(complexity)
-            if meta_steps is not None:
-                ax_acc.plot(meta_steps, meta_mean, color=colors['Meta-SGD'], 
-                           linewidth=2, label='Meta-SGD', alpha=0.9)
-                ax_acc.fill_between(meta_steps, meta_mean - meta_std, meta_mean + meta_std, 
-                                   color=colors['Meta-SGD'], alpha=0.3)
-            
-            # Plot SGD trajectories
-            sgd_tasks, sgd_mean, sgd_std = self.prepare_sgd_trajectory_data(complexity)
-            if sgd_tasks is not None:
-                ax_acc.plot(sgd_tasks, sgd_mean, color=colors['SGD'], 
-                           linewidth=2, label='SGD Baseline', alpha=0.9)
-                ax_acc.fill_between(sgd_tasks, sgd_mean - sgd_std, sgd_mean + sgd_std, 
-                                   color=colors['SGD'], alpha=0.3)
-            
-            ax_acc.set_title(f'{complexity} - Accuracy', fontsize=12, fontweight='bold')
-            ax_acc.set_ylabel('Accuracy')
-            ax_acc.set_ylim(0.4, 1.0)
-            ax_acc.grid(True, alpha=0.3)
-            ax_acc.legend()
-            
-            # Bottom row: Show individual seed trajectories
-            ax_seeds = axes[1, i]
-            
-            # Plot individual SGD seeds
-            if complexity in self.sgd_trajectories:
-                for seed, df in self.sgd_trajectories[complexity].items():
-                    tasks = np.arange(len(df))
-                    running_avg = pd.Series(df['query_accuracy']).rolling(window=100, min_periods=1).mean()
-                    ax_seeds.plot(tasks, running_avg, color=colors['SGD'], 
-                                 alpha=0.6, linewidth=1, label=f'SGD Seed {seed}' if seed == 1 else "")
-            
-            # Plot individual Meta-SGD seeds
-            if complexity in self.meta_sgd_trajectories:
-                for seed, df in self.meta_sgd_trajectories[complexity].items():
-                    ax_seeds.plot(df['log_step'], df['val_accuracy'], color=colors['Meta-SGD'], 
-                                 alpha=0.6, linewidth=1, label=f'Meta-SGD Seed {seed}' if seed == 0 else "")
-            
-            ax_seeds.set_title(f'{complexity} - Individual Seeds', fontsize=12, fontweight='bold')
-            ax_seeds.set_xlabel('Training Progress')
-            ax_seeds.set_ylabel('Accuracy')
-            ax_seeds.set_ylim(0.4, 1.0)
-            ax_seeds.grid(True, alpha=0.3)
-            if i == 0:
-                ax_seeds.legend()
-        
-        plt.tight_layout()
-        
-        # Save figure
-        plt.savefig(os.path.join(self.output_dir, 'detailed_trajectory_comparison.svg'), 
-                   dpi=300, bbox_inches='tight')
-        plt.savefig(os.path.join(self.output_dir, 'detailed_trajectory_comparison.png'), 
-                   dpi=300, bbox_inches='tight')
-        plt.show()
-        
-        print(f"Detailed comparison saved to {self.output_dir}/detailed_trajectory_comparison.svg")
-        
-    def generate_summary_stats(self):
-        """Generate summary statistics for the trajectory comparison."""
-        print("Generating summary statistics...")
-        
-        summary_data = []
-        
-        for complexity in ["Simple (F8D3)", "Medium (F8D5)", "Complex (F32D3)"]:
-            # SGD statistics
-            if complexity in self.sgd_trajectories:
-                sgd_final_accs = []
-                for seed, df in self.sgd_trajectories[complexity].items():
-                    sgd_final_accs.append(df['query_accuracy'].iloc[-1])
-                
-                sgd_mean = np.mean(sgd_final_accs)
-                sgd_std = np.std(sgd_final_accs)
-                
-                summary_data.append({
-                    'Complexity': complexity,
-                    'Method': 'SGD',
-                    'Final_Accuracy': sgd_mean,
-                    'Std_Dev': sgd_std,
-                    'Seeds': len(sgd_final_accs)
-                })
-            
-            # Meta-SGD statistics
-            if complexity in self.meta_sgd_trajectories:
-                meta_final_accs = []
-                for seed, df in self.meta_sgd_trajectories[complexity].items():
-                    meta_final_accs.append(df['val_accuracy'].iloc[-1])
-                
-                meta_mean = np.mean(meta_final_accs)
-                meta_std = np.std(meta_final_accs)
-                
-                summary_data.append({
-                    'Complexity': complexity,
-                    'Method': 'Meta-SGD',
-                    'Final_Accuracy': meta_mean,
-                    'Std_Dev': meta_std,
-                    'Seeds': len(meta_final_accs)
-                })
-        
-        summary_df = pd.DataFrame(summary_data)
-        
-        # Save summary
-        summary_df.to_csv(os.path.join(self.output_dir, 'trajectory_comparison_summary.csv'), index=False)
-        
-        # Print summary
-        print("\nTrajectory Comparison Summary:")
-        print("=" * 60)
-        print(summary_df.to_string(index=False))
-        
-        # Compute improvements
-        print("\nMeta-Learning Improvements:")
-        print("=" * 30)
-        
-        for complexity in ["Simple (F8D3)", "Medium (F8D5)", "Complex (F32D3)"]:
-            sgd_row = summary_df[(summary_df['Complexity'] == complexity) & (summary_df['Method'] == 'SGD')]
-            meta_row = summary_df[(summary_df['Complexity'] == complexity) & (summary_df['Method'] == 'Meta-SGD')]
-            
-            if not sgd_row.empty and not meta_row.empty:
-                sgd_acc = sgd_row['Final_Accuracy'].iloc[0]
-                meta_acc = meta_row['Final_Accuracy'].iloc[0]
-                improvement = meta_acc - sgd_acc
-                improvement_pct = (improvement / sgd_acc) * 100
-                
-                print(f"{complexity}: {improvement:+.4f} ({improvement_pct:+.1f}%)")
+            print(f"No complete trajectories found for {key}")
+            final_trajectories[key] = []
+    
+    return final_trajectories
 
-def main():
-    """Main function to generate Figure 2."""
-    parser = argparse.ArgumentParser(description='Generate Figure 2: Meta-SGD vs SGD Trajectories')
-    parser.add_argument('--sgd-dir', default='results/baseline_sgd/baseline_run1',
-                       help='Directory containing SGD baseline results')
-    parser.add_argument('--meta-sgd-dir', default='results',
-                       help='Directory containing Meta-SGD results')
-    parser.add_argument('--output-dir', default='figures',
-                       help='Output directory for figures')
+def load_sgd_baseline_trajectories():
+    """Load SGD baseline trajectories"""
     
-    args = parser.parse_args()
+    baseline_trajectories = {
+        'F8D3': [],
+        'F8D5': [],
+        'F32D3': []
+    }
     
-    # Create generator
-    generator = Figure2Generator(args.sgd_dir, args.meta_sgd_dir, args.output_dir)
+    # Look for baseline trajectory files in nested subdirectories
+    baseline_files = glob.glob('results/baseline_sgd/**/*baselinetrajectory*.csv', recursive=True)
     
-    # Load data
-    generator.load_sgd_trajectories()
-    generator.load_meta_sgd_trajectories()
+    for file_path in baseline_files:
+        filename = os.path.basename(file_path)
+        
+        # Extract configuration from the directory name and filename
+        # Pattern: results/baseline_sgd/baseline_ms_feat8_dep3_seed1/concept_mlp_14_bits_feats8_depth3_sgdsteps100_lr0.001_runbaseline_ms_feat8_dep3_seed1_seed1_baselinetrajectory.csv
+        
+        # First try to extract from filename
+        if 'feats8_depth3' in filename:
+            key = 'F8D3'
+        elif 'feats8_depth5' in filename:
+            key = 'F8D5'
+        elif 'feats32_depth3' in filename:
+            key = 'F32D3'
+        elif 'feats16_depth3' in filename:
+            key = 'F16D3'  # Medium complexity
+        else:
+            # Try to extract from directory name
+            dir_name = os.path.basename(os.path.dirname(file_path))
+            if 'feat8_dep3' in dir_name:
+                key = 'F8D3'
+            elif 'feat8_dep5' in dir_name:
+                key = 'F8D5'
+            elif 'feat32_dep3' in dir_name:
+                key = 'F32D3'
+            elif 'feat16_dep3' in dir_name:
+                key = 'F16D3'
+            else:
+                continue
+            
+        # Skip F16D3 for now since we're focusing on F8D3, F8D5, F32D3
+        if key == 'F16D3':
+            continue
+            
+        try:
+            df = pd.read_csv(file_path)
+            if len(df) > 10:  # Basic sanity check
+                baseline_trajectories[key].append({
+                    'file': file_path,
+                    'data': df,
+                    'seed': extract_seed_from_filename(filename)
+                })
+                print(f"Loaded SGD baseline {key}: {filename} ({len(df)} steps)")
+        except Exception as e:
+            print(f"Error loading {filename}: {e}")
     
-    # Generate figures
-    generator.plot_figure_2()
-    generator.plot_detailed_trajectory_comparison()
-    generator.generate_summary_stats()
+    return baseline_trajectories
+
+def extract_seed_from_filename(filename):
+    """Extract seed number from filename"""
+    seed_match = re.search(r'seed(\d+)', filename)
+    return int(seed_match.group(1)) if seed_match else 0
+
+def create_trajectory_comparison():
+    """Create Figure 2 style trajectory comparison"""
     
-    print(f"Figure 2 generation complete! Results saved to {args.output_dir}/")
+    print("Loading Meta-SGD trajectories...")
+    meta_sgd_trajectories = load_complete_meta_sgd_trajectories()
+    
+    print("Loading SGD baseline trajectories...")
+    sgd_baseline_trajectories = load_sgd_baseline_trajectories()
+    
+    # Create subplots
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    
+    complexities = ['F8D3', 'F8D5', 'F32D3']
+    complexity_names = ['Simple (F8D3)', 'Medium (F8D5)', 'Complex (F32D3)']
+    
+    for i, (complexity, name) in enumerate(zip(complexities, complexity_names)):
+        ax = axes[i]
+        
+        # Plot Meta-SGD trajectories
+        meta_sgd_accs = []
+        meta_sgd_final_accs = []
+        
+        for traj in meta_sgd_trajectories[complexity]:
+            df = traj['data']
+            if 'val_accuracy' in df.columns:
+                accuracy = df['val_accuracy'].values
+                meta_sgd_accs.append(accuracy)
+                meta_sgd_final_accs.append(accuracy[-1])
+        
+        # Plot Meta-SGD mean with std (normalized to 0-1 range)
+        if meta_sgd_accs:
+            # Normalize all trajectories to same length for cleaner comparison
+            max_len = min(500, max(len(acc) for acc in meta_sgd_accs))  # Cap at 500 for readability
+            
+            padded_accs = []
+            for acc in meta_sgd_accs:
+                if len(acc) >= max_len:
+                    # Subsample if trajectory is longer
+                    indices = np.linspace(0, len(acc)-1, max_len).astype(int)
+                    padded = acc[indices]
+                else:
+                    # Pad with last value if shorter
+                    padded = np.pad(acc, (0, max_len - len(acc)), mode='edge')
+                padded_accs.append(padded)
+            
+            meta_sgd_mean = np.mean(padded_accs, axis=0)
+            meta_sgd_std = np.std(padded_accs, axis=0)
+            
+            # Normalize x-axis to 0-1 range
+            x_range = np.linspace(0, 1, len(meta_sgd_mean))
+            ax.plot(x_range, meta_sgd_mean, color='green', linewidth=3, label='Meta-SGD')
+            ax.fill_between(x_range, meta_sgd_mean - meta_sgd_std, 
+                           meta_sgd_mean + meta_sgd_std, alpha=0.2, color='green')
+            
+            meta_sgd_final_mean = np.mean(meta_sgd_final_accs)
+            meta_sgd_final_std = np.std(meta_sgd_final_accs)
+        else:
+            meta_sgd_final_mean = 0
+            meta_sgd_final_std = 0
+            ax.text(0.5, 0.5, f'No complete\nMeta-SGD trajectories\nfor {complexity}', 
+                   transform=ax.transAxes, ha='center', va='center', 
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="lightcoral", alpha=0.7))
+        
+        # Plot SGD baseline trajectories  
+        sgd_accs = []
+        sgd_final_accs = []
+        
+        for traj in sgd_baseline_trajectories[complexity]:
+            df = traj['data']
+            # Handle different column names
+            if 'query_accuracy' in df.columns:
+                accuracy = df['query_accuracy'].values
+            elif 'val_accuracy' in df.columns:
+                accuracy = df['val_accuracy'].values
+            else:
+                continue
+                
+            sgd_accs.append(accuracy)
+            sgd_final_accs.append(accuracy[-1])
+        
+        # Plot SGD mean with std (normalized to 0-1 range)
+        if sgd_accs:
+            # Normalize all trajectories to same length for cleaner comparison
+            max_len = min(500, max(len(acc) for acc in sgd_accs))  # Cap at 500 for readability
+            
+            padded_accs = []
+            for acc in sgd_accs:
+                if len(acc) >= max_len:
+                    # Subsample if trajectory is longer
+                    indices = np.linspace(0, len(acc)-1, max_len).astype(int)
+                    padded = acc[indices]
+                else:
+                    # Pad with last value if shorter
+                    padded = np.pad(acc, (0, max_len - len(acc)), mode='edge')
+                padded_accs.append(padded)
+            
+            sgd_mean = np.mean(padded_accs, axis=0)
+            sgd_std = np.std(padded_accs, axis=0)
+            
+            # Apply heavy smoothing to SGD trajectories to reduce noise
+            from scipy.ndimage import gaussian_filter1d
+            sgd_mean_smooth = gaussian_filter1d(sgd_mean, sigma=10)
+            sgd_std_smooth = gaussian_filter1d(sgd_std, sigma=5)
+            
+            # Normalize x-axis to 0-1 range
+            x_range = np.linspace(0, 1, len(sgd_mean_smooth))
+            ax.plot(x_range, sgd_mean_smooth, color='red', linewidth=3, label='SGD Baseline')
+            ax.fill_between(x_range, sgd_mean_smooth - sgd_std_smooth, 
+                           sgd_mean_smooth + sgd_std_smooth, alpha=0.2, color='red')
+            
+            sgd_final_mean = np.mean(sgd_final_accs)
+            sgd_final_std = np.std(sgd_final_accs)
+        else:
+            sgd_final_mean = 0
+            sgd_final_std = 0
+        
+        # Formatting
+        ax.set_title(name, fontsize=14, fontweight='bold')
+        ax.set_xlabel('Training Progress (Normalized)', fontsize=12)
+        ax.set_ylabel('Accuracy', fontsize=12)
+        ax.set_ylim(0.4, 1.0)
+        ax.set_xlim(0, 1)
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        
+        # Add performance summary
+        if meta_sgd_final_mean > 0 and sgd_final_mean > 0:
+            improvement = meta_sgd_final_mean - sgd_final_mean
+            ax.text(0.05, 0.95, f'SGD: {sgd_final_mean:.3f}', 
+                   transform=ax.transAxes, fontsize=10,
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="lightcoral", alpha=0.7))
+            ax.text(0.05, 0.85, f'Meta-SGD: {meta_sgd_final_mean:.3f}', 
+                   transform=ax.transAxes, fontsize=10,
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgreen", alpha=0.7))
+            ax.text(0.05, 0.75, f'Δ: +{improvement:.3f}', 
+                   transform=ax.transAxes, fontsize=10, fontweight='bold',
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="lightyellow", alpha=0.7))
+    
+    plt.suptitle('Learning Trajectories: Meta-SGD vs SGD Baseline', fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    
+    # Save the figure
+    plt.savefig('figure_2_meta_sgd_vs_sgd_trajectories.svg', dpi=300, bbox_inches='tight')
+    plt.savefig('figure_2_meta_sgd_vs_sgd_trajectories.png', dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    print("\nFigure 2 trajectories saved!")
 
 if __name__ == "__main__":
-    main() 
+    create_trajectory_comparison() 

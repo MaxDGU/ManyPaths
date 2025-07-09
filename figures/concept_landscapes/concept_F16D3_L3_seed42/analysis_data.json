@@ -1,0 +1,113 @@
+{
+  "concept_info": {
+    "expr": [
+      "NOT",
+      [
+        "OR",
+        [
+          "AND",
+          "F7_T",
+          "F3_T"
+        ],
+        [
+          "NOT",
+          "F1_T"
+        ]
+      ]
+    ],
+    "expr_str": "\u00ac(((x_7 \u2227 x_3) \u2228 \u00ac(x_1)))",
+    "literals": 3,
+    "depth": 4,
+    "num_features": 16,
+    "max_depth": 3,
+    "seed": 42,
+    "positive_ratio": 0.375
+  },
+  "training_info": {
+    "final_loss": 0.0009439173736609519,
+    "final_accuracy": 1.0,
+    "n_hidden": 32,
+    "n_layers": 3,
+    "epochs": 2000,
+    "lr": 0.05
+  },
+  "landscape_properties_1d": [
+    {
+      "local_minima_count": 1,
+      "local_minima": [
+        [
+          0.40703517587939686,
+          0.0009163795039057732
+        ]
+      ],
+      "global_minimum": [
+        0.40703517587939686,
+        0.0009163795039057732
+      ],
+      "mean_curvature": 9.191201322458007e-07,
+      "max_curvature": 3.702472895383835e-06,
+      "loss_range": 0.003031205851584673,
+      "loss_variance": 6.000719121016924e-07
+    },
+    {
+      "local_minima_count": 1,
+      "local_minima": [
+        [
+          0.045226130653266416,
+          0.0009426599135622382
+        ]
+      ],
+      "global_minimum": [
+        0.045226130653266416,
+        0.0009426599135622382
+      ],
+      "mean_curvature": 2.2541063677782963e-06,
+      "max_curvature": 8.819624781608582e-06,
+      "loss_range": 0.006306003429926932,
+      "loss_variance": 2.423899219471651e-06
+    },
+    {
+      "local_minima_count": 1,
+      "local_minima": [
+        [
+          0.015075376884421843,
+          0.0009431992075406015
+        ]
+      ],
+      "global_minimum": [
+        0.015075376884421843,
+        0.0009431992075406015
+      ],
+      "mean_curvature": 6.664553751247097e-07,
+      "max_curvature": 2.116430550813675e-06,
+      "loss_range": 0.002299627580214292,
+      "loss_variance": 3.5733960643085003e-07
+    },
+    {
+      "local_minima_count": 1,
+      "local_minima": [
+        [
+          0.2864321608040199,
+          0.0009303767001256347
+        ]
+      ],
+      "global_minimum": [
+        0.2864321608040199,
+        0.0009303767001256347
+      ],
+      "mean_curvature": 1.031149301038246e-06,
+      "max_curvature": 3.248453140258789e-06,
+      "loss_range": 0.0036934666568413377,
+      "loss_variance": 7.76139354436723e-07
+    }
+  ],
+  "avg_properties": {
+    "avg_local_minima": 1.0,
+    "avg_curvature": 1.2177077940467631e-06,
+    "avg_loss_range": 0.0038325758796418086,
+    "min_loss_2d": 0.0009246800909750164,
+    "max_loss_2d": 0.004484633915126324,
+    "loss_variance_2d": 2.803090756433662e-07
+  },
+  "timestamp": "2025-07-09T11:38:01.161957"
+}
