@@ -235,33 +235,46 @@ class CameraReadyAnalyzer:
         print(f"Generated clean trajectories: {self.output_dir}/clean_trajectories.pdf")
         
     def _plot_config_trajectories(self, ax, config: str, k: int):
-        """Plot trajectories for specific configuration"""
-        trajectories = []
+        """Plot trajectories for a specific configuration and K value"""
         
+        # Find experiments matching this config and K value
+        matching_experiments = []
         for key, data in self.trajectory_data.items():
-            if f"{config}_K{k}" in key and data['trajectory']:
-                episodes = [t['episode'] for t in data['trajectory']]
-                accuracies = [t['accuracy'] for t in data['trajectory']]
+            if config in key and f'_K{k}_' in key:
+                matching_experiments.append(data)
+        
+        if not matching_experiments:
+            ax.text(0.5, 0.5, f'No {config} K={k} data', 
+                   ha='center', va='center', transform=ax.transAxes)
+            return
+        
+        # Plot each experiment's trajectory
+        colors = plt.cm.Set3(np.linspace(0, 1, len(matching_experiments)))
+        
+        for i, data in enumerate(matching_experiments):
+            trajectory = data['trajectory']
+            if not trajectory:
+                continue
                 
-                if episodes and accuracies:
-                    ax.plot(episodes, accuracies, alpha=0.7, linewidth=1.5)
-                    trajectories.append(accuracies)
-        
-        # Add mean trajectory if we have data
-        if trajectories:
-            max_len = max(len(t) for t in trajectories)
-            padded_trajectories = []
-            for t in trajectories:
-                padded = t + [t[-1]] * (max_len - len(t))  # Pad with last value
-                padded_trajectories.append(padded)
+            # Use 'episodes' as x-axis and 'accuracy' as y-axis
+            episodes = [t['episodes'] for t in trajectory]
+            accuracies = [t['accuracy'] for t in trajectory]
             
-            mean_trajectory = np.mean(padded_trajectories, axis=0)
-            episodes = list(range(len(mean_trajectory)))
-            ax.plot(episodes, mean_trajectory, 'k-', linewidth=3, alpha=0.8, label='Mean')
-            ax.legend()
+            # Sample every 50th point to avoid overcrowding
+            step = max(1, len(episodes) // 40)  # Show ~40 points max
+            episodes_sampled = episodes[::step]
+            accuracies_sampled = accuracies[::step]
+            
+            ax.plot(episodes_sampled, accuracies_sampled, 
+                   color=colors[i], alpha=0.7, linewidth=1.5,
+                   label=f'Seed {i+1}')
         
-        ax.set_ylim(0.5, 1.0)
+        ax.set_xlabel('Episodes')
+        ax.set_ylabel('Validation Accuracy')
+        ax.set_title(f'{config} - K={k}')
         ax.grid(True, alpha=0.3)
+        ax.legend(fontsize=8)
+        ax.set_ylim(0, 1)
     
     def generate_k_comparison(self):
         """Generate K=1 vs K=10 comparison analysis"""
@@ -526,6 +539,93 @@ class CameraReadyAnalyzer:
         
         print(f"Generated comprehensive report: {self.output_dir}/camera_ready_comprehensive_report.md")
     
+    def generate_sample_efficiency(self):
+        """Generate sample efficiency analysis"""
+        print("4. Generating sample efficiency analysis...")
+        
+        if not self.trajectory_data:
+            print("❌ No trajectory data available for sample efficiency analysis")
+            return
+        
+        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+        fig.suptitle('Sample Efficiency Analysis: K=1 vs K=10', fontsize=16, fontweight='bold')
+        
+        configs = ['F8D3', 'F16D3', 'F32D3']
+        k_values = [1, 10]
+        
+        for col, config in enumerate(configs):
+            for row, k in enumerate(k_values):
+                ax = axes[row, col]
+                
+                # Find matching experiments
+                matching_experiments = []
+                for key, data in self.trajectory_data.items():
+                    if config in key and f'_K{k}_' in key:
+                        matching_experiments.append(data)
+                
+                if not matching_experiments:
+                    ax.text(0.5, 0.5, f'No {config} K={k} data', 
+                           ha='center', va='center', transform=ax.transAxes)
+                    ax.set_title(f'{config} - K={k}')
+                    continue
+                
+                # Collect all trajectories for this config/K combination
+                all_episodes = []
+                all_accuracies = []
+                
+                for data in matching_experiments:
+                    trajectory = data['trajectory']
+                    if trajectory:
+                        episodes = [t['episodes'] for t in trajectory]
+                        accuracies = [t['accuracy'] for t in trajectory]
+                        all_episodes.extend(episodes)
+                        all_accuracies.extend(accuracies)
+                
+                if all_episodes and all_accuracies:
+                    # Create bins for episode ranges to compute mean accuracy
+                    max_episodes = max(all_episodes)
+                    episode_bins = np.linspace(0, max_episodes, 50)
+                    
+                    binned_accuracies = []
+                    binned_episodes = []
+                    
+                    for i in range(len(episode_bins) - 1):
+                        mask = (np.array(all_episodes) >= episode_bins[i]) & (np.array(all_episodes) < episode_bins[i+1])
+                        if np.any(mask):
+                            binned_accuracies.append(np.mean(np.array(all_accuracies)[mask]))
+                            binned_episodes.append((episode_bins[i] + episode_bins[i+1]) / 2)
+                    
+                    if binned_episodes and binned_accuracies:
+                        color = 'red' if k == 1 else 'blue'
+                        ax.plot(binned_episodes, binned_accuracies, 
+                               color=color, linewidth=2, alpha=0.8,
+                               label=f'K={k}')
+                        
+                        # Add individual experiment trajectories (lighter)
+                        for data in matching_experiments:
+                            trajectory = data['trajectory']
+                            if trajectory:
+                                episodes = [t['episodes'] for t in trajectory]
+                                accuracies = [t['accuracy'] for t in trajectory]
+                                # Sample to reduce visual clutter
+                                step = max(1, len(episodes) // 20)
+                                ax.plot(episodes[::step], accuracies[::step], 
+                                       color=color, alpha=0.2, linewidth=0.5)
+                
+                ax.set_xlabel('Training Episodes')
+                ax.set_ylabel('Validation Accuracy')
+                ax.set_title(f'{config} - K={k}')
+                ax.grid(True, alpha=0.3)
+                ax.set_ylim(0, 1)
+                if col == 0:  # Only show legend on first column
+                    ax.legend()
+        
+        plt.tight_layout()
+        plt.savefig(self.output_dir / 'sample_efficiency.pdf', dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        print(f"Generated sample efficiency analysis: {self.output_dir}/sample_efficiency.pdf")
+    
     def run_full_analysis(self):
         """Run complete camera-ready analysis pipeline"""
         print("Starting Camera-Ready Analysis Pipeline...")
@@ -548,12 +648,17 @@ class CameraReadyAnalyzer:
         print("\n4. Generating camera-ready report...")
         self.generate_camera_ready_report()
         
+        # Generate sample efficiency analysis
+        print("\n5. Generating sample efficiency analysis...")
+        self.generate_sample_efficiency()
+        
         print(f"\n✅ Analysis complete! Results saved to: {self.output_dir}")
         print("\nCamera-ready deliverables:")
         print(f"  - Clean trajectories: {self.output_dir}/clean_trajectories.pdf")
         print(f"  - K comparison: {self.output_dir}/k_comparison.pdf")
         print(f"  - Statistical summary: {self.output_dir}/statistical_summary.csv")
         print(f"  - Full report: {self.output_dir}/camera_ready_report.md")
+        print(f"  - Sample efficiency: {self.output_dir}/sample_efficiency.pdf")
         
         return comparison_data
 
