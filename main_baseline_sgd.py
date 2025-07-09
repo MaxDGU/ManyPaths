@@ -121,6 +121,11 @@ def main(
         cached_tasks = None
         actual_num_tasks_to_evaluate = num_tasks_to_evaluate
 
+    # --- Dataset and Model Misc Init ---
+    alphabet, bits_for_model, channels, n_output = init_misc(
+        experiment, None, num_concept_features_override=num_concept_features
+    )
+
     # NEW: Landscape logging setup for SGD baseline
     landscape_log_path = None
     theta_start = None
@@ -154,11 +159,6 @@ def main(
             print(f"Landscape logging enabled for SGD baseline")
             print(f"Log path: {landscape_log_path}")
             print(f"Checkpoints will be saved to: {checkpoint_dir}")
-
-    # --- Dataset and Model Misc Init ---
-    alphabet, bits_for_model, channels, n_output = init_misc(
-        experiment, None, num_concept_features_override=num_concept_features
-    )
     collate_fn = get_collate(experiment, device) # For concept learning
 
     eval_dataset = None
