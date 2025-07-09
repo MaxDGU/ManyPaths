@@ -47,10 +47,18 @@ class CameraReadyAnalyzer:
         
     def load_della_results(self, logs_dir: str = "logs"):
         """Load and parse Della camera_ready_array results"""
-        logs_path = Path(logs_dir)
-        camera_ready_files = list(logs_path.glob("camera_ready_array_*_*.out"))
+        camera_ready_files = []
         
-        print(f"Found {len(camera_ready_files)} camera-ready log files")
+        # Search in multiple locations: current directory and logs directory
+        search_paths = [Path("."), Path(logs_dir)]
+        
+        for search_path in search_paths:
+            if search_path.exists():
+                files = list(search_path.glob("camera_ready_array_*_*.out"))
+                camera_ready_files.extend(files)
+                print(f"Found {len(files)} camera-ready files in {search_path}")
+        
+        print(f"Total found: {len(camera_ready_files)} camera-ready log files")
         
         for log_file in camera_ready_files:
             try:

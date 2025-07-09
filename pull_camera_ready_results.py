@@ -66,25 +66,32 @@ class DellaResultsPuller:
     def list_camera_ready_files(self):
         """List camera_ready_array files on Della"""
         try:
-            result = subprocess.run([
-                "ssh", f"{self.della_user}@della-gpu.princeton.edu", 
-                f"cd {self.della_path} && find logs/ -name 'camera_ready_array_*_*.out' | head -20"
-            ], capture_output=True, text=True, timeout=30)
+            # Search in main directory and logs directory
+            search_commands = [
+                f"cd {self.della_path} && find . -maxdepth 1 -name 'camera_ready_array_*_*.out'",
+                f"cd {self.della_path} && find logs/ -name 'camera_ready_array_*_*.out' 2>/dev/null || true"
+            ]
             
-            if result.returncode == 0:
-                files = result.stdout.strip().split('\n')
-                if files and files[0]:
-                    print(f"📁 Found {len(files)} camera-ready files on Della:")
-                    for file in files[:5]:  # Show first 5
-                        print(f"   - {file}")
-                    if len(files) > 5:
-                        print(f"   ... and {len(files) - 5} more")
-                    return files
-                else:
-                    print("📂 No camera-ready files found on Della")
-                    return []
+            all_files = []
+            
+            for cmd in search_commands:
+                result = subprocess.run([
+                    "ssh", f"{self.della_user}@della-gpu.princeton.edu", cmd
+                ], capture_output=True, text=True, timeout=30)
+                
+                if result.returncode == 0 and result.stdout.strip():
+                    files = [f.strip() for f in result.stdout.strip().split('\n') if f.strip()]
+                    all_files.extend(files)
+            
+            if all_files:
+                print(f"📁 Found {len(all_files)} camera-ready files on Della:")
+                for file in all_files[:5]:  # Show first 5
+                    print(f"   - {file}")
+                if len(all_files) > 5:
+                    print(f"   ... and {len(all_files) - 5} more")
+                return all_files
             else:
-                print(f"❌ Failed to list files: {result.stderr}")
+                print("📂 No camera-ready files found on Della")
                 return []
                 
         except Exception as e:
@@ -102,7 +109,7 @@ class DellaResultsPuller:
                 compress_cmd = [
                     "ssh", f"{self.della_user}@della-gpu.princeton.edu",
                     f"cd {self.della_path} && tar -czf camera_ready_results.tar.gz "
-                    f"logs/camera_ready_array_*_*.out results/ saved_models/ || true"
+                    f"camera_ready_array_*_*.out logs/camera_ready_array_*_*.out results/ saved_models/ || true"
                 ]
                 
                 result = subprocess.run(compress_cmd, capture_output=True, text=True, timeout=300)
@@ -138,20 +145,33 @@ class DellaResultsPuller:
             else:
                 # Direct rsync (alternative method)
                 print("   Using rsync to pull results...")
-                rsync_cmd = [
+                
+                os.makedirs(self.local_results_dir, exist_ok=True)
+                os.makedirs(self.local_results_dir / "logs", exist_ok=True)
+                
+                # Try to sync from main directory first
+                rsync_main_cmd = [
+                    "rsync", "-avz", "--progress",
+                    f"{self.della_user}@della-gpu.princeton.edu:{self.della_path}/camera_ready_array_*_*.out",
+                    str(self.local_results_dir)
+                ]
+                
+                result1 = subprocess.run(rsync_main_cmd, capture_output=True, text=True, timeout=600)
+                
+                # Then try logs directory
+                rsync_logs_cmd = [
                     "rsync", "-avz", "--progress",
                     f"{self.della_user}@della-gpu.princeton.edu:{self.della_path}/logs/camera_ready_array_*_*.out",
                     str(self.local_results_dir / "logs/")
                 ]
                 
-                os.makedirs(self.local_results_dir / "logs", exist_ok=True)
-                result = subprocess.run(rsync_cmd, capture_output=True, text=True, timeout=600)
+                result2 = subprocess.run(rsync_logs_cmd, capture_output=True, text=True, timeout=600)
                 
-                if result.returncode == 0:
+                if result1.returncode == 0 or result2.returncode == 0:
                     print("   ✅ Rsync successful")
                     return True
                 else:
-                    print(f"   ❌ Rsync failed: {result.stderr}")
+                    print(f"   ❌ Rsync failed. Main dir error: {result1.stderr}, Logs dir error: {result2.stderr}")
                     return False
                     
         except Exception as e:
