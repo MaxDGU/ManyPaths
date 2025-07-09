@@ -21,6 +21,8 @@ except AttributeError:
 from evaluation import evaluate
 from initialization import init_model
 from constants import *
+from utils import (initialize_trajectory_log, log_landscape_checkpoint, 
+                   save_checkpoint_dict, extract_model_parameters)
 
 # How often to save a periodic checkpoint (in terms of episodes_seen)
 # This should align with or be a multiple of the logging frequency (1000)
@@ -41,7 +43,9 @@ def meta_train(
     verbose: bool = False,
     checkpoint_interval: int = 40, # NEW: from main.py
     results_dir: str = "results",       # NEW: for saving intermediate trajectories
-    file_prefix: str = "default_run"   # NEW: for saving intermediate trajectories
+    file_prefix: str = "default_run",   # NEW: for saving intermediate trajectories
+    log_landscape: bool = False,        # NEW: Enable landscape logging
+    checkpoint_every: int = 10          # NEW: Checkpoint every N steps for landscape
 ):
     if verbose:
         print("--- Meta-Training ---", flush=True)
@@ -60,6 +64,28 @@ def meta_train(
     
     # Ensure the directory for intermediate trajectories exists
     os.makedirs(results_dir, exist_ok=True)
+
+    # NEW: Landscape logging setup
+    landscape_log_path = None
+    theta_start = None
+    checkpoint_dir = None
+    
+    if log_landscape:
+        # Initialize landscape logging
+        landscape_log_path = os.path.join(results_dir, f"{file_prefix}_landscape_trajectory.csv")
+        initialize_trajectory_log(landscape_log_path, "Meta-SGD")
+        
+        # Store initial parameters for geodesic length computation
+        theta_start = extract_model_parameters(meta).detach().clone()
+        
+        # Create checkpoint directory for landscape analysis
+        checkpoint_dir = os.path.join(results_dir, "checkpoints", "meta_sgd", 
+                                     file_prefix.split('_feats')[0] if '_feats' in file_prefix else file_prefix)
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        
+        if verbose:
+            print(f"Landscape logging enabled. Log path: {landscape_log_path}")
+            print(f"Checkpoints will be saved to: {checkpoint_dir}")
 
     for epoch_num in range(epochs):
         epoch_start_time = time.time() # Timer for the epoch
@@ -126,6 +152,19 @@ def meta_train(
                 grad_alignments_log.append(current_alignment_for_log_step) # Appends mean or NaN
                 no_improve_for_epochs += 1 # This counter is per LOG_INTERVAL check
 
+                # NEW: Landscape logging at LOG_INTERVAL
+                if log_landscape and landscape_log_path:
+                    try:
+                        # Use current task data for Hessian computation
+                        log_landscape_checkpoint(
+                            landscape_log_path, episodes_seen_total, meta, 
+                            meta_val_loss, meta_val_acc,
+                            X_s[0], y_s[0], criterion, theta_start
+                        )
+                    except Exception as e:
+                        if verbose:
+                            print(f"Warning: Landscape logging failed at step {episodes_seen_total}: {e}")
+
                 is_new_best_by_loss = False
                 if meta_val_loss < best_model_info["loss"]:
                     best_model_info["loss"] = meta_val_loss
@@ -133,6 +172,20 @@ def meta_train(
                     best_model_info["epoch"] = epoch_num + 1 # Store epoch number (1-indexed)
                     no_improve_for_epochs = 0
                     is_new_best_by_loss = True
+                
+                # NEW: Checkpoint saving for landscape analysis
+                if log_landscape and checkpoint_dir and episodes_seen_total % (checkpoint_every * LOG_INTERVAL) == 0:
+                    checkpoint_path = os.path.join(checkpoint_dir, f"step{episodes_seen_total}.pt")
+                    try:
+                        save_checkpoint_dict(
+                            checkpoint_path, episodes_seen_total, meta, optimizer,
+                            meta_val_loss, meta_val_acc
+                        )
+                        if verbose:
+                            print(f"Saved landscape checkpoint: {checkpoint_path}")
+                    except Exception as e:
+                        if verbose:
+                            print(f"Warning: Failed to save landscape checkpoint: {e}")
                 
                 if verbose:
                     alignment_str = f"{current_alignment_for_log_step:.4f}" if not np.isnan(current_alignment_for_log_step) else "N/A"

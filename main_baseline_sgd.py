@@ -11,7 +11,8 @@ import time
 
 # Assuming these can be imported directly and sys.path is okay from your cluster setup
 from initialization import init_dataset, init_model, init_misc
-from utils import set_random_seeds, get_collate
+from utils import (set_random_seeds, get_collate, initialize_trajectory_log, 
+                   log_landscape_checkpoint, save_checkpoint_dict, extract_model_parameters)
 from generate_concepts import PCFG_DEFAULT_MAX_DEPTH # For default value
 from constants import DEFAULT_INDEX # Assuming this is relevant for model init if not doing hyper_search
 
@@ -20,7 +21,8 @@ BASELINE_MODELS_SAVE_DIR = "saved_models/baseline_sgd_task_models"
 BASELINE_RESULTS_DIR = "results/baseline_sgd"
 SAVED_DATASETS_DIR = "saved_datasets" # Base directory where MAML datasets are saved
 
-def train_baseline_on_task(model, support_X, support_y, criterion, optimizer, device, num_train_steps):
+def train_baseline_on_task(model, support_X, support_y, criterion, optimizer, device, num_train_steps, 
+                          log_landscape=False, landscape_log_path=None, theta_start=None, task_idx=0):
     model.train()
     losses = []
     for step in range(num_train_steps):
@@ -30,6 +32,21 @@ def train_baseline_on_task(model, support_X, support_y, criterion, optimizer, de
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
+        
+        # NEW: Landscape logging every 10 steps
+        if log_landscape and landscape_log_path and step % 10 == 0:
+            try:
+                # Calculate accuracy
+                with torch.no_grad():
+                    pred_acc = ((torch.sigmoid(pred) > 0.5) == support_y.bool()).float().mean().item()
+                
+                log_landscape_checkpoint(
+                    landscape_log_path, step + task_idx * num_train_steps, model,
+                    loss.item(), pred_acc, support_X, support_y, criterion, theta_start
+                )
+            except Exception as e:
+                print(f"Warning: Landscape logging failed at task {task_idx}, step {step}: {e}")
+                
     return losses
 
 def main(
@@ -59,7 +76,9 @@ def main(
     maml_pcfg_max_depth_source: int = PCFG_DEFAULT_MAX_DEPTH,
     maml_seed_source: int = 0,
     maml_skip_param_source: int = 1,
-    maml_alphabet_source: str = "asian"
+    maml_alphabet_source: str = "asian",
+    log_landscape: bool = False,  # NEW: Enable landscape logging
+    checkpoint_every: int = 10    # NEW: Checkpoint every N steps for landscape analysis
 ):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
@@ -101,6 +120,40 @@ def main(
     else:
         cached_tasks = None
         actual_num_tasks_to_evaluate = num_tasks_to_evaluate
+
+    # NEW: Landscape logging setup for SGD baseline
+    landscape_log_path = None
+    theta_start = None
+    checkpoint_dir = None
+    
+    if log_landscape:
+        # Create file prefix for this run
+        file_prefix_parts = [
+            experiment, m, data_type, f"feats{num_concept_features}", 
+            f"depth{pcfg_max_depth}", f"sgd_baseline", f"seed{seed}"
+        ]
+        file_prefix = "_".join(file_prefix_parts)
+        
+        # Initialize landscape logging
+        landscape_log_path = os.path.join(current_run_results_dir, f"{file_prefix}_landscape_trajectory.csv")
+        initialize_trajectory_log(landscape_log_path, "SGD")
+        
+        # Create checkpoint directory for landscape analysis
+        checkpoint_dir = os.path.join(current_run_results_dir, "checkpoints", "sgd", 
+                                     f"feats{num_concept_features}_depth{pcfg_max_depth}")
+        os.makedirs(checkpoint_dir, exist_ok=True)
+        
+        # Initialize model to get starting parameters
+        init_model_for_theta = init_model(
+            m, data_type, index=hyper_index, verbose=False, 
+            channels=channels, bits=bits_for_model, n_output=n_output
+        ).to(device)
+        theta_start = extract_model_parameters(init_model_for_theta).detach().clone()
+        
+        if verbose:
+            print(f"Landscape logging enabled for SGD baseline")
+            print(f"Log path: {landscape_log_path}")
+            print(f"Checkpoints will be saved to: {checkpoint_dir}")
 
     # --- Dataset and Model Misc Init ---
     alphabet, bits_for_model, channels, n_output = init_misc(
@@ -352,7 +405,8 @@ def main(
         # --- Train on Support Set ---
         if verbose: print(f"  Task {task_idx+1}/{actual_num_tasks_to_evaluate} from {dataset_source_info.split()[0]}: Training... ({num_sgd_steps_per_task} steps)")
         support_losses = train_baseline_on_task(
-            model, X_s, y_s, criterion, optimizer, device, num_sgd_steps_per_task
+            model, X_s, y_s, criterion, optimizer, device, num_sgd_steps_per_task,
+            log_landscape=log_landscape, landscape_log_path=landscape_log_path, theta_start=theta_start, task_idx=task_idx
         )
         final_support_loss = support_losses[-1] if support_losses else float('nan')
 
@@ -483,6 +537,10 @@ if __name__ == "__main__":
     parser.add_argument("--maml-seed-source", type=int, default=0, help="MAML run's seed (used for dataset identification)")
     parser.add_argument("--maml-skip-param-source", type=int, default=1, help="MAML run's skip_param (for mod experiment)")
     parser.add_argument("--maml-alphabet-source", type=str, default="asian", help="MAML run's alphabet (for omniglot experiment)")
+
+    # New arguments for landscape logging
+    parser.add_argument("--log-landscape", action="store_true", help="Enable landscape logging during training.")
+    parser.add_argument("--checkpoint-every", type=int, default=10, help="Checkpoint every N steps for landscape analysis.")
 
     args = parser.parse_args()
     

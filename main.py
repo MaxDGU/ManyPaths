@@ -70,7 +70,9 @@ def main(
     saved_models_dir: str = SAVED_MODELS_DIR_DEFAULT,   # NEW: For custom saved_models directory
     saved_datasets_dir: str = SAVED_DATASETS_DIR_DEFAULT, # NEW: For custom saved_datasets directory
     checkpoint_subdir: str = CHECKPOINT_SUBDIR_DEFAULT,  # NEW: For custom checkpoint subdirectory name
-    verbose_debug: bool = False  # NEW: Enable verbose debugging output
+    verbose_debug: bool = False,  # NEW: Enable verbose debugging output
+    log_landscape: bool = False,  # NEW: Enable landscape logging
+    checkpoint_every: int = 10    # NEW: Checkpoint every N steps for landscape analysis
 ):
     # --- Debug print inside main() ---
     print("main.py: Entered main() function. About to print device.", flush=True)
@@ -256,7 +258,9 @@ def main(
         patience=patience,
         checkpoint_interval=checkpoint_interval,
         results_dir=results_dir, # Pass custom results_dir for intermediate trajectories
-        file_prefix=file_prefix_for_run # Pass seed-specific prefix for intermediate trajectories
+        file_prefix=file_prefix_for_run, # Pass seed-specific prefix for intermediate trajectories
+        log_landscape=log_landscape, # NEW: Pass landscape logging flag
+        checkpoint_every=checkpoint_every # NEW: Pass checkpoint frequency
     )
 
     num_logs = len(val_losses)
@@ -374,6 +378,8 @@ if __name__ == "__main__":
     parser.add_argument("--saved_datasets_dir", type=str, default=SAVED_DATASETS_DIR_DEFAULT, help="Directory to save generated datasets")
     parser.add_argument("--checkpoint_subdir", type=str, default=CHECKPOINT_SUBDIR_DEFAULT, help="Subdirectory name within saved_models_dir for periodic checkpoints")
     parser.add_argument("--verbose-debug", action="store_true", dest="verbose_debug", help="Enable verbose debugging output to identify hanging issues")
+    parser.add_argument("--log_landscape", action="store_true", dest="log_landscape", help="Enable landscape logging") # NEW argument
+    parser.add_argument("--checkpoint_every", type=int, default=10, help="Checkpoint every N steps for landscape analysis") # NEW argument
     args = parser.parse_args()
     # --- Debug print after parsing args ---
     print(f"main.py: Arguments parsed: {args}", flush=True)
