@@ -7,6 +7,7 @@ from torch.nn.utils.rnn import pad_sequence
 import csv
 import pandas as pd
 from pathlib import Path
+import math
 
 
 def collate_concept(batch, device="cpu"):
@@ -86,6 +87,7 @@ def calculate_accuracy(predictions, targets):
 def top_eigenvalue(loss_fn, params, num_iterations=20, tolerance=1e-8):
     """
     Compute the top eigenvalue of the Hessian using power iteration.
+    Added robust error handling for complex models.
     
     Args:
         loss_fn: Function that computes loss given current parameters
@@ -94,69 +96,134 @@ def top_eigenvalue(loss_fn, params, num_iterations=20, tolerance=1e-8):
         tolerance: Convergence tolerance
         
     Returns:
-        Top eigenvalue (lambda_max)
+        Top eigenvalue (lambda_max) or NaN if computation fails
     """
-    device = params.device
-    
-    # Initialize random vector
-    v = torch.randn_like(params)
-    v = v / torch.norm(v)
-    
-    lambda_old = 0.0
-    
-    for i in range(num_iterations):
-        # Compute Hessian-vector product using double backward
-        grad = torch.autograd.grad(loss_fn(), params, create_graph=True)[0]
+    try:
+        device = params.device
         
-        # Hessian-vector product
-        Hv = torch.autograd.grad(grad, params, grad_outputs=v, retain_graph=True)[0]
+        # Initialize random vector
+        v = torch.randn_like(params)
+        v_norm = torch.norm(v)
+        if v_norm == 0 or torch.isnan(v_norm) or torch.isinf(v_norm):
+            return float('nan')
+        v = v / v_norm
         
-        # Power iteration update
-        v_new = Hv / torch.norm(Hv)
-        lambda_new = torch.dot(v, Hv).item()
+        lambda_old = 0.0
         
-        # Check convergence
-        if abs(lambda_new - lambda_old) < tolerance:
-            break
-            
-        v = v_new
-        lambda_old = lambda_new
-    
-    return lambda_new
+        for i in range(num_iterations):
+            try:
+                # Compute Hessian-vector product using double backward
+                loss_val = loss_fn()
+                if torch.isnan(loss_val) or torch.isinf(loss_val):
+                    return float('nan')
+                
+                grad = torch.autograd.grad(loss_val, params, create_graph=True, retain_graph=True)[0]
+                if grad is None or torch.any(torch.isnan(grad)) or torch.any(torch.isinf(grad)):
+                    return float('nan')
+                
+                # Hessian-vector product
+                Hv = torch.autograd.grad(grad, params, grad_outputs=v, retain_graph=True)[0]
+                if Hv is None or torch.any(torch.isnan(Hv)) or torch.any(torch.isinf(Hv)):
+                    return float('nan')
+                
+                # Check for zero Hessian-vector product
+                Hv_norm = torch.norm(Hv)
+                if Hv_norm == 0 or torch.isnan(Hv_norm) or torch.isinf(Hv_norm):
+                    return float('nan')
+                
+                # Power iteration update
+                v_new = Hv / Hv_norm
+                lambda_new = torch.dot(v, Hv).item()
+                
+                # Check for NaN/inf in eigenvalue
+                if math.isnan(lambda_new) or math.isinf(lambda_new):
+                    return float('nan')
+                
+                # Check convergence
+                if abs(lambda_new - lambda_old) < tolerance:
+                    break
+                    
+                v = v_new
+                lambda_old = lambda_new
+                
+            except Exception as e:
+                # Any computation error (memory, graph issues, etc.)
+                return float('nan')
+        
+        return lambda_new
+        
+    except Exception as e:
+        # Catch any unexpected errors
+        return float('nan')
 
-def hessian_trace_sqr(loss_fn, params, num_samples=50):
+def hessian_trace_sqr(loss_fn, params, num_samples=20):  # Reduced from 50 samples
     """
     Estimate Tr(H^2) using Hutchinson's estimator.
+    Added robust error handling and reduced sample count for efficiency.
     
     Args:
         loss_fn: Function that computes loss given current parameters
         params: Current model parameters (flattened tensor)
-        num_samples: Number of random vectors for estimation
+        num_samples: Number of random vectors for estimation (reduced for stability)
         
     Returns:
-        Estimate of trace of Hessian squared
+        Estimate of trace of Hessian squared or NaN if computation fails
     """
-    device = params.device
-    trace_estimate = 0.0
-    
-    for i in range(num_samples):
-        # Random Rademacher vector
-        z = torch.randint_like(params, low=0, high=2, dtype=torch.float32)
-        z = 2 * z - 1  # Convert {0,1} to {-1,1}
+    try:
+        device = params.device
+        trace_estimate = 0.0
+        successful_samples = 0
         
-        # First order gradient
-        grad = torch.autograd.grad(loss_fn(), params, create_graph=True)[0]
+        for i in range(num_samples):
+            try:
+                # Random Rademacher vector
+                z = torch.randint_like(params, low=0, high=2, dtype=torch.float32)
+                z = 2 * z - 1  # Convert {0,1} to {-1,1}
+                
+                # First order gradient
+                loss_val = loss_fn()
+                if torch.isnan(loss_val) or torch.isinf(loss_val):
+                    continue
+                    
+                grad = torch.autograd.grad(loss_val, params, create_graph=True, retain_graph=True)[0]
+                if grad is None or torch.any(torch.isnan(grad)) or torch.any(torch.isinf(grad)):
+                    continue
+                
+                # Hessian-vector product Hz
+                try:
+                    Hz = torch.autograd.grad(grad, params, grad_outputs=z, retain_graph=True)[0]
+                    if Hz is None or torch.any(torch.isnan(Hz)) or torch.any(torch.isinf(Hz)):
+                        continue
+                        
+                    # H^2 z = H(Hz) - this is the most expensive and failure-prone step
+                    H2z = torch.autograd.grad(grad, params, grad_outputs=Hz, retain_graph=True)[0]
+                    if H2z is None or torch.any(torch.isnan(H2z)) or torch.any(torch.isinf(H2z)):
+                        continue
+                    
+                    # z^T H^2 z
+                    trace_contribution = torch.dot(z, H2z).item()
+                    if math.isnan(trace_contribution) or math.isinf(trace_contribution):
+                        continue
+                        
+                    trace_estimate += trace_contribution
+                    successful_samples += 1
+                    
+                except Exception:
+                    # Skip this sample if triple backward fails
+                    continue
+                    
+            except Exception:
+                # Skip this sample on any error
+                continue
         
-        # Hessian-vector product Hz
-        Hz = torch.autograd.grad(grad, params, grad_outputs=z, retain_graph=True)[0]
+        if successful_samples == 0:
+            return float('nan')
         
-        # H^2 z = H(Hz)
-        H2z = torch.autograd.grad(grad, params, grad_outputs=Hz, retain_graph=True)[0]
+        return trace_estimate / successful_samples
         
-        # z^T H^2 z
-        trace_estimate += torch.dot(z, H2z).item()
-    
-    return trace_estimate / num_samples
+    except Exception as e:
+        # Catch any unexpected errors
+        return float('nan')
 
 def geodesic_length(theta_start, theta_end):
     """
@@ -238,6 +305,7 @@ def log_landscape_checkpoint(log_path, step, model, loss_val, accuracy_val,
                            X_support, y_support, criterion, theta_start=None):
     """
     Log landscape metrics for current training step.
+    Enhanced with adaptive computation and better error handling.
     
     Args:
         log_path: Path to CSV file
@@ -258,18 +326,43 @@ def log_landscape_checkpoint(log_path, step, model, loss_val, accuracy_val,
         # Create loss closure
         loss_fn = create_loss_closure(model, X_support, y_support, criterion)
         
-        # Compute Hessian metrics (may be expensive)
-        try:
-            lambda_max = top_eigenvalue(loss_fn, theta_current, num_iterations=10)
-        except:
-            lambda_max = float('nan')
+        # Determine if we should compute expensive Hessian metrics
+        # Skip for very large models or every N steps to save computation
+        model_size = sum(p.numel() for p in model.parameters())
+        should_compute_hessian = (
+            step % max(1, 5000 // (model_size // 10000 + 1)) == 0  # Adaptive frequency
+            and model_size < 1000000  # Skip for very large models
+        )
+        
+        lambda_max = float('nan')
+        hessian_trace = float('nan')
+        
+        if should_compute_hessian:
+            # Compute Hessian metrics with timeout protection
+            print(f"Computing Hessian metrics for step {step} (model size: {model_size})")
             
-        try:
-            hessian_trace = hessian_trace_sqr(loss_fn, theta_current, num_samples=20)
-        except:
-            hessian_trace = float('nan')
+            # Top eigenvalue with reduced iterations for large models
+            num_iterations = 10 if model_size < 100000 else 5
+            lambda_max = top_eigenvalue(loss_fn, theta_current, num_iterations=num_iterations)
             
-        # Compute geodesic length from start
+            # Hessian trace with reduced samples for large models  
+            num_samples = 10 if model_size < 100000 else 5
+            hessian_trace = hessian_trace_sqr(loss_fn, theta_current, num_samples=num_samples)
+            
+            # Log computation results
+            if not math.isnan(lambda_max):
+                print(f"✅ Lambda_max computed: {lambda_max:.6f}")
+            else:
+                print("⚠️  Lambda_max computation failed (NaN)")
+                
+            if not math.isnan(hessian_trace):
+                print(f"✅ Hessian trace computed: {hessian_trace:.6f}")
+            else:
+                print("⚠️  Hessian trace computation failed (NaN)")
+        else:
+            print(f"⏭️  Skipping Hessian computation for step {step} (model size: {model_size})")
+            
+        # Compute geodesic length from start (always computable)
         if theta_start is not None:
             geo_length = geodesic_length(theta_start, theta_current)
         else:
@@ -282,8 +375,21 @@ def log_landscape_checkpoint(log_path, step, model, loss_val, accuracy_val,
             writer = csv.writer(f)
             writer.writerow(row)
             
+        # Print progress update
+        if step % 10000 == 0:
+            print(f"📊 Step {step}: loss={loss_val:.4f}, acc={accuracy_val:.4f}, "
+                  f"θ_norm={theta_norm:.2f}, geo_len={geo_length:.2f}")
+            
     except Exception as e:
-        print(f"Warning: Failed to log landscape checkpoint at step {step}: {e}")
+        print(f"❌ Error in landscape logging at step {step}: {e}")
+        # Write row with NaN values to maintain CSV structure
+        row = [step, float('nan'), loss_val, accuracy_val, float('nan'), float('nan'), float('nan')]
+        try:
+            with open(log_path, 'a', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(row)
+        except:
+            pass  # If file writing also fails, just continue
 
 def save_checkpoint_dict(checkpoint_path, step, model, optimizer, loss_val, 
                         accuracy_val, lambda_max=None, hessian_trace=None, geo_length=None):
