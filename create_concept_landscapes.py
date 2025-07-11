@@ -25,17 +25,26 @@ sns.set_palette("husl")
 
 def load_landscape_files():
     """Load all landscape trajectory CSV files"""
-    # Look for landscape trajectory files
+    # Look for landscape trajectory files in multiple locations
     patterns = [
+        # Local files (after pulling from della)
         "della_analysis_results/*landscape_trajectory.csv",
-        "*landscape_trajectory.csv"
+        "*landscape_trajectory.csv",
+        # Direct on della - results directory
+        "results/*landscape_trajectory.csv",
+        "/scratch/gpfs/mg7411/ManyPaths/results/*landscape_trajectory.csv"
     ]
     
     files = []
     for pattern in patterns:
-        files.extend(glob.glob(pattern))
+        found_files = glob.glob(pattern)
+        files.extend(found_files)
+        if found_files:
+            print(f"Found {len(found_files)} files matching pattern: {pattern}")
     
-    print(f"Found {len(files)} landscape trajectory files")
+    # Remove duplicates
+    files = list(set(files))
+    print(f"Found {len(files)} unique landscape trajectory files")
     
     datasets = {}
     for file in files:
@@ -59,7 +68,7 @@ def load_landscape_files():
                     'seed': int(seed),
                     'file': file
                 }
-                print(f"✅ Loaded {key}: {len(df)} steps")
+                print(f"✅ Loaded {key}: {len(df)} steps from {file}")
             else:
                 print(f"⚠️  Could not parse filename: {file}")
                 
