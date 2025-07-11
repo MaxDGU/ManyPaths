@@ -17,6 +17,15 @@ from pathlib import Path
 # Add the current directory to path for imports
 sys.path.insert(0, '/scratch/gpfs/mg7411/ManyPaths')
 
+# Import required modules for landscape analysis
+import pandas as pd
+import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend for della
+import matplotlib.pyplot as plt
+import seaborn as sns
+import re
+
 # Import the main landscape creation functions
 from create_concept_landscapes import (
     load_landscape_files, 

@@ -42,8 +42,14 @@ def load_landscape_files():
         if found_files:
             print(f"Found {len(found_files)} files matching pattern: {pattern}")
     
-    # Remove duplicates
-    files = list(set(files))
+    # Remove duplicates by checking filename only (not full path)
+    unique_files = {}
+    for file in files:
+        filename = Path(file).name
+        if filename not in unique_files:
+            unique_files[filename] = file
+    
+    files = list(unique_files.values())
     print(f"Found {len(files)} unique landscape trajectory files")
     
     datasets = {}
@@ -53,12 +59,28 @@ def load_landscape_files():
             
             # Extract experiment info from filename
             # Example: concept_mlp_14_bits_feats32_depth7_adapt10_2ndOrd_seed3_landscape_trajectory.csv
-            match = re.search(r'feats(\d+)_depth(\d+).*seed(\d+)', file)
+            match = re.search(r'feats(\d+)_depth(\d+)_adapt(\d+).*seed(\d+)', file)
             
             if match:
-                features, depth, seed = match.groups()
+                features, depth, adaptation_steps, seed = match.groups()
                 config = f"F{features}D{depth}"
                 key = f"{config}_seed{seed}"
+                
+                # Filter out problematic experiments
+                # Skip seed 42 (different adaptation steps and incomplete)
+                if seed == '42':
+                    print(f"⚠️  Skipping {key}: seed 42 experiment (different adaptation steps)")
+                    continue
+                
+                # Skip experiments with very few steps (likely incomplete)
+                if len(df) < 100:
+                    print(f"⚠️  Skipping {key}: too few steps ({len(df)})")
+                    continue
+                
+                # Skip if adaptation steps don't match expected (should be 10)
+                if adaptation_steps != '10':
+                    print(f"⚠️  Skipping {key}: wrong adaptation steps ({adaptation_steps})")
+                    continue
                 
                 datasets[key] = {
                     'data': df,
@@ -66,9 +88,10 @@ def load_landscape_files():
                     'features': int(features),
                     'depth': int(depth),
                     'seed': int(seed),
+                    'adaptation_steps': int(adaptation_steps),
                     'file': file
                 }
-                print(f"✅ Loaded {key}: {len(df)} steps from {file}")
+                print(f"✅ Loaded {key}: {len(df)} steps from {Path(file).name}")
             else:
                 print(f"⚠️  Could not parse filename: {file}")
                 
@@ -92,16 +115,24 @@ def create_concept_complexity_landscapes(datasets):
     
     # Create figure with subplots for each complexity type
     n_configs = len(complexity_groups)
+    if n_configs == 0:
+        print("❌ No valid configurations found!")
+        return
+    
     cols = min(3, n_configs)
     rows = (n_configs + cols - 1) // cols
     
     fig, axes = plt.subplots(rows, cols, figsize=(5*cols, 4*rows))
+    
+    # Handle different subplot configurations
     if n_configs == 1:
-        axes = [axes]
-    elif rows == 1:
-        axes = [axes]
+        axes = [axes]  # Single subplot
+    elif rows == 1 and cols > 1:
+        axes = list(axes)  # Single row, multiple columns
+    elif rows > 1 and cols == 1:
+        axes = list(axes)  # Multiple rows, single column
     else:
-        axes = axes.flatten()
+        axes = axes.flatten()  # Multiple rows and columns
     
     fig.suptitle('Loss Landscapes by Concept Complexity', fontsize=16)
     
@@ -136,12 +167,14 @@ def create_concept_complexity_landscapes(datasets):
             
             ax.set_xlabel('Parameter Norm')
             ax.set_ylabel('Training Progress (normalized)')
-            ax.set_title(f'{config}\n{data["features"]} features, depth {data["depth"]}')
+            ax.set_title(f'{config}\n{config_data[0]["features"]} features, depth {config_data[0]["depth"]}')
             ax.grid(True, alpha=0.3)
             
             # Add colorbar
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label('Loss')
+        else:
+            ax.set_title(f'{config}\n(No valid data)')
     
     # Hide unused subplots
     for i in range(n_configs, len(axes)):
