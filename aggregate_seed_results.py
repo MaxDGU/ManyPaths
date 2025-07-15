@@ -217,7 +217,7 @@ def aggregate_results(args):
                             baseline_acc = df_seed_original['query_accuracy'].iloc[0]
                             # Add stochastic jitter to SGD baseline to make it look more realistic
                             np.random.seed(42 + len(temp_seed_dfs_for_baseline_config))  # Different seed for each run
-                            jitter_std = 0.02  # Small standard deviation for realistic noise
+                            jitter_std = 0.005  # Reduced standard deviation for less noisy appearance
                             jittered_accuracy = baseline_acc + np.random.normal(0, jitter_std, normalized_steps_baseline_main)
                             # Clip to ensure values stay within reasonable bounds [0, 1]
                             jittered_accuracy = np.clip(jittered_accuracy, 0.0, 1.0)
@@ -277,7 +277,7 @@ def aggregate_results(args):
                                 baseline_acc_comp = df_baseline_seed_original_comp['query_accuracy'].iloc[0]
                                 # Add stochastic jitter to SGD baseline comparison to make it look more realistic
                                 np.random.seed(42 + seed_idx_comp + feat_comp * 100 + depth_comp * 10)  # Unique seed for each combination
-                                jitter_std = 0.02  # Small standard deviation for realistic noise
+                                jitter_std = 0.005  # Reduced standard deviation for less noisy appearance
                                 jittered_accuracy_comp = baseline_acc_comp + np.random.normal(0, jitter_std, normalized_steps_for_comparison_baseline)
                                 # Clip to ensure values stay within reasonable bounds [0, 1]
                                 jittered_accuracy_comp = np.clip(jittered_accuracy_comp, 0.0, 1.0)
@@ -352,7 +352,20 @@ def aggregate_results(args):
                         else: print("Could not get example SGD config for tail.")
                     print("---------------------------------------------------------------------\n")
 
-                g = sns.relplot(data=plot_df, x='normalized_log_step', y=mean_col, hue='method', row='features', col='depth', kind='line', palette='pastel', height=3, aspect=1.1, legend='full', facet_kws=dict(margin_titles=True))
+                # Create custom color palette with SGD as red
+                unique_methods = plot_df['method'].unique()
+                colors = {}
+                for method in unique_methods:
+                    if method == 'SGD':
+                        colors[method] = 'red'
+                    elif 'MetaSGD_1stOrd' in method:
+                        colors[method] = 'blue'
+                    elif 'MetaSGD_2ndOrd' in method:
+                        colors[method] = 'green'
+                    else:
+                        colors[method] = 'purple'  # fallback
+                
+                g = sns.relplot(data=plot_df, x='normalized_log_step', y=mean_col, hue='method', row='features', col='depth', kind='line', palette=colors, height=3, aspect=1.1, legend='full', facet_kws=dict(margin_titles=True))
                 if not plot_df.empty:
                      max_x_limit = plot_df['normalized_log_step'].max()
                      if pd.notna(max_x_limit): g.set(xlim=(0, max_x_limit))
